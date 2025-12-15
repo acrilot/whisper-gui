@@ -12,6 +12,9 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+# ============================================================================
+# SETTINGS AND FILE PATHS
+# ============================================================================
 BASE_DIR = os.getcwd()
 GITHUB_FFMPEG_URL = "https://raw.githubusercontent.com/acrilot/whisper-gui/refs/heads/main/install_ffmpeg.bat"
 
@@ -41,6 +44,8 @@ LANGUAGE_OPTIONS = {
     "Çince": "cn",
     "Japonca": "ja"
 }
+
+FORMAT_OPTIONS = ["PDF", "DOCX", "TXT"]
 
 class TqdmYakalayici:
     def __init__(self, callback_func):
@@ -75,6 +80,7 @@ class WhisperApp:
         # Variables
         self.secilen_dosya = tk.StringVar()
         self.cikti_konumu = tk.StringVar()
+        self.secilen_format = tk.StringVar(value=FORMAT_OPTIONS[0]) # Varsayılan PDF
         self.secilen_model_gorunum = tk.StringVar()
         self.secilen_dil_adi = tk.StringVar(value="Otomatik Algıla")
         self.kurulum_modu = tk.BooleanVar(value=False)
@@ -230,7 +236,7 @@ class WhisperApp:
 
     def create_file_section(self, parent):
         """Create file selection section"""
-        file_frame = ttk.LabelFrame(parent, text="📁 Dosya Seçimi", padding=15, style="Card.TFrame")
+        file_frame = ttk.LabelFrame(parent, text="📁 Dosya ve Format Seçimi", padding=15, style="Card.TFrame")
         file_frame.pack(fill="x", pady=(0, 10))
         
         # Input file
@@ -253,23 +259,46 @@ class WhisperApp:
             command=self.dosya_sec, style="Secondary.TButton")
         btn_browse.pack(side="right", padx=(10, 0))
         
-        # Output file
+        # Output options row (Format + File Path)
         output_container = tk.Frame(file_frame, bg=self.colors['bg_white'])
         output_container.pack(fill="x")
         
-        tk.Label(output_container, text="Çıktı Dosyası:", 
+        # Alt alta yerine yan yana düzen için frame
+        out_opts_row = tk.Frame(output_container, bg=self.colors['bg_white'])
+        out_opts_row.pack(fill="x")
+
+        # Format Selection (Sol taraf)
+        format_frame = tk.Frame(out_opts_row, bg=self.colors['bg_white'])
+        format_frame.pack(side="left", padx=(0, 10))
+        
+        tk.Label(format_frame, text="Çıktı Formatı:", 
+            font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white']).pack(anchor="w", pady=(0, 5))
+            
+        self.combo_format = ttk.Combobox(format_frame, 
+            textvariable=self.secilen_format,
+            values=FORMAT_OPTIONS,
+            state="readonly", width=20, font=("Segoe UI", 9))
+        self.combo_format.pack(fill="x", ipady=5)
+        self.combo_format.bind("<<ComboboxSelected>>", self.format_degisti)
+
+        # File Path (Sağ Taraf - Genişleyen)
+        path_frame = tk.Frame(out_opts_row, bg=self.colors['bg_white'])
+        path_frame.pack(side="left", fill="x", expand=True)
+
+        tk.Label(path_frame, text="Çıktı Yolu:", 
             font=("Segoe UI", 9, "bold"),
             bg=self.colors['bg_white'],
             fg=self.colors['text_dark']).pack(anchor="w", pady=(0, 5))
         
-        output_row = tk.Frame(output_container, bg=self.colors['bg_white'])
-        output_row.pack(fill="x")
+        path_inner_row = tk.Frame(path_frame, bg=self.colors['bg_white'])
+        path_inner_row.pack(fill="x")
         
-        entry_output = tk.Entry(output_row, textvariable=self.cikti_konumu,
+        entry_output = tk.Entry(path_inner_row, textvariable=self.cikti_konumu,
             font=("Segoe UI", 9), relief="solid", borderwidth=1)
         entry_output.pack(side="left", fill="x", expand=True, ipady=8)
         
-        btn_save = ttk.Button(output_row, text="Değiştir",
+        btn_save = ttk.Button(path_inner_row, text="Değiştir",
             command=self.kayit_yeri_sec, style="Secondary.TButton")
         btn_save.pack(side="right", padx=(10, 0))
 
@@ -433,16 +462,44 @@ class WhisperApp:
             ])
         if dosya:
             self.secilen_dosya.set(dosya)
-            klasor, isim = os.path.split(dosya)
-            isim_kok = os.path.splitext(isim)[0]
-            self.cikti_konumu.set(os.path.join(klasor, f"{isim_kok}_transkript.txt"))
+            self.guncelle_cikti_yolu(dosya)
+
+    def format_degisti(self, event=None):
+        """Handle format change"""
+        dosya = self.secilen_dosya.get()
+        if dosya:
+            self.guncelle_cikti_yolu(dosya)
+
+    def guncelle_cikti_yolu(self, input_dosya):
+        """Update output path based on format"""
+        klasor, isim = os.path.split(input_dosya)
+        isim_kok = os.path.splitext(isim)[0]
+        
+        format_str = self.secilen_format.get()
+        ext = ".txt"
+        if "PDF" in format_str: ext = ".pdf"
+        elif "DOCX" in format_str: ext = ".docx"
+        
+        self.cikti_konumu.set(os.path.join(klasor, f"{isim_kok}_transkript{ext}"))
 
     def kayit_yeri_sec(self):
         """Select output file"""
+        format_str = self.secilen_format.get()
+        
+        ext = ".txt"
+        ftypes = [("Metin Dosyası", "*.txt")]
+        
+        if "PDF" in format_str: 
+            ext = ".pdf"
+            ftypes = [("PDF Dosyası", "*.pdf")]
+        elif "DOCX" in format_str:
+            ext = ".docx"
+            ftypes = [("Word Dosyası", "*.docx")]
+
         dosya = filedialog.asksaveasfilename(
             title="Çıktı Dosyasını Kaydet",
-            defaultextension=".txt",
-            filetypes=[("Metin Dosyası", "*.txt")])
+            defaultextension=ext,
+            filetypes=ftypes)
         if dosya:
             self.cikti_konumu.set(dosya)
 
@@ -473,22 +530,114 @@ class WhisperApp:
         t = threading.Thread(target=self.worker_thread, daemon=True)
         t.start()
 
+    def dosya_donustur(self, txt_yolu, hedef_yolu, format_tipi):
+        """Convert txt to requested format safely with robust auto-install check"""
+        try:
+            # --- YARDIMCI FONKSİYON: GÜVENLİ YÜKLEME ---
+            def kutuphane_yukle_ve_al(paket_adi, import_adi):
+                try:
+                    __import__(import_adi)
+                    return True
+                except ImportError:
+                    self.log_yaz(f">>> Uyarı: '{paket_adi}' eksik, otomatik yükleniyor...")
+                    try:
+                        startupinfo = subprocess.STARTUPINFO()
+                        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                        
+                        subprocess.run(
+                            [sys.executable, "-m", "pip", "install", paket_adi],
+                            check=True,
+                            capture_output=True,
+                            startupinfo=startupinfo
+                        )
+                        __import__(import_adi)
+                        self.log_yaz(f"   -> '{paket_adi}' başarıyla kuruldu.")
+                        return True
+                    except subprocess.CalledProcessError:
+                        self.log_yaz(f"!!! KRİTİK: '{paket_adi}' yüklenemedi (Non-zero exit).")
+                        return False
+            # -------------------------------------------
+
+            # 1. GEREKLİLİK KONTROLLERİ
+            if "DOCX" in format_tipi:
+                if not kutuphane_yukle_ve_al("python-docx", "docx"):
+                    raise Exception("Gerekli kütüphane (python-docx) kurulamadığı için işlem iptal edildi.")
+
+            elif "PDF" in format_tipi:
+                if not kutuphane_yukle_ve_al("fpdf", "fpdf"):
+                    raise Exception("Gerekli kütüphane (fpdf) kurulamadığı için işlem iptal edildi.")
+
+            # 2. DOSYA OKUMA
+            with open(txt_yolu, 'r', encoding='utf-8') as f:
+                icerik = f.read()
+
+            # 3. DÖNÜŞTÜRME İŞLEMİ
+            if "DOCX" in format_tipi:
+                self.log_yaz(">>> Word (DOCX) oluşturuluyor...")
+                from docx import Document
+                doc = Document()
+                doc.add_heading('Transkript', 0)
+                
+                # Paragrafları temizleyerek ekle
+                for satir in icerik.split('\n'):
+                    temiz_satir = satir.strip()
+                    if temiz_satir:
+                        doc.add_paragraph(temiz_satir)
+                doc.save(hedef_yolu)
+                
+            elif "PDF" in format_tipi:
+                self.log_yaz(">>> PDF oluşturuluyor...")
+                from fpdf import FPDF
+                
+                class PDF(FPDF):
+                    def header(self):
+                        try:
+                            # Windows Arial fontunu kullan (Türkçe için)
+                            self.add_font('Arial', '', r'C:\Windows\Fonts\arial.ttf', uni=True)
+                            self.set_font('Arial', '', 10)
+                        except:
+                            self.set_font('Arial', '', 10)
+                        self.cell(0, 10, 'Transkript', 0, 1, 'C')
+
+                pdf = PDF()
+                pdf.add_page()
+                
+                # Font ayarı
+                try:
+                    pdf.add_font('Arial', '', r'C:\Windows\Fonts\arial.ttf', uni=True)
+                    pdf.set_font("Arial", size=11)
+                except:
+                    self.log_yaz("! Uyarı: Arial fontu bulunamadı, standart font kullanılıyor.")
+                    pdf.set_font("Arial", size=11)
+                
+                # Multi_cell ile satır kaydırma
+                pdf.multi_cell(0, 8, icerik)
+                pdf.output(hedef_yolu)
+                
+            self.log_yaz(f"✓ Dönüştürme Başarılı: {os.path.basename(hedef_yolu)}")
+            return True
+
+        except Exception as e:
+            self.log_yaz(f"!!! Dönüştürme Hatası: {e}")
+            self.log_yaz("! Dosya TXT formatında bırakıldı.")
+            return False
+
     def worker_thread(self):
         """Worker thread for transcription"""
         original_stderr = sys.stderr
+        temp_txt_path = ""
         
         try:
             # Setup mode
             if self.kurulum_modu.get():
                 self.log_yaz(">>> KURULUM BAŞLADI...")
-                libs = ["openai-whisper", "faster-whisper", "huggingface_hub"]
+                # fpdf ve python-docx eklendi
+                libs = ["openai-whisper", "faster-whisper", "huggingface_hub", "fpdf", "python-docx"]
                 
                 # 1. Standart Kütüphaneler
                 for lib in libs:
                     self.log_yaz(f"   -> Kontrol: {lib}")
                     try:
-                        # check=True ekledik: Hata olursa Exception fırlatır
-                        # text=True ekledik: Çıktıyı okunabilir metin yapar
                         result = subprocess.run(
                             [sys.executable, "-m", "pip", "install", lib], 
                             capture_output=True, 
@@ -498,7 +647,7 @@ class WhisperApp:
                     except subprocess.CalledProcessError as e:
                         self.log_yaz(f"!!! HATA: {lib} kurulamadı!")
                         self.log_yaz(f"Hata Detayı: {e.stderr}")
-                        raise Exception(f"{lib} kurulumu başarısız oldu.") # İşlemi tamamen durdur
+                        raise Exception(f"{lib} kurulumu başarısız oldu.")
 
                 # 2. PyTorch (CUDA)
                 self.log_yaz("   -> Kontrol: PyTorch (CUDA)")
@@ -526,37 +675,23 @@ class WhisperApp:
                 
                 if "faster" in model_key:
                     from faster_whisper import download_model
-                    repo_id = ("turbo" if "turbo" in model_key 
-                        else "large-v3")
+                    repo_id = ("turbo" if "turbo" in model_key else "large-v3")
                     download_model(repo_id, output_dir=hedef_model_yolu)
                     self.log_yaz("İndirme tamamlandı!")
                     self.root.after(0, self.modelleri_tara_ve_guncelle)
                 else:
                     self.log_yaz(f"Standart model indiriliyor: {model_key}...")
-                    # Whisper'ın kendi indirme fonksiyonunu kullanmıyoruz çünkü yolu biz seçmek istiyoruz
                     import whisper
-                    
-                    # Model ismini düzelt (std_large -> large-v3)
                     _model_name = model_key.replace("std_", "").replace("large", "large-v3")
-                    
-                    # Whisper'ın download fonksiyonunu kullanarak belirttiğimiz yola indiriyoruz
-                    # Not: Bu işlem standart kütüphanede public değildir, manuel URL'den çekmek daha garantidir 
-                    # veya kütüphanenin varsayılan davranışına izin verip PATH kontrolünü kaldırmalısınız.
-                    
-                    # EN TEMİZ YÖNTEM: Kütüphanenin kendi yapısını kullanmak
-                    # Ancak dosyayı sizin istediğiniz PATHS konumuna kopyalamak için:
                     url = whisper._MODELS[_model_name]
                     import urllib.request
                     from tqdm import tqdm
-
-                    # İndirme çubuğu ile indirme (Basit örnek)
+                    
                     try:
                         with tqdm(unit='B', unit_scale=True, miniters=1, desc=_model_name) as t:
                             def reporthook(blocknum, blocksize, totalsize):
                                 t.total = totalsize
                                 t.update(blocknum * blocksize - t.n)
-                                # GUI'yi güncellemek isterseniz callback ekleyin
-                                
                             urllib.request.urlretrieve(url, hedef_model_yolu, reporthook=reporthook)
                         self.log_yaz("İndirme tamamlandı!")
                     except Exception as e:
@@ -565,20 +700,24 @@ class WhisperApp:
             # Transcription
             hedef_dil_kodu = LANGUAGE_OPTIONS[self.secilen_dil_adi.get()]
             dosya = self.secilen_dosya.get()
-            cikti = self.cikti_konumu.get()
+            nihai_cikti = self.cikti_konumu.get()
+            secilen_format = self.secilen_format.get()
+            
+            # GÜVENLİK İÇİN ÖNCE TXT OLARAK KAYDET (Geçici Dosya)
+            temp_txt_path = os.path.splitext(nihai_cikti)[0] + "_temp.txt"
+            
             vad_aktif = self.anti_loop_modu.get()
             zaman_damgasi_aktif = self.zaman_damgasi_var.get()
 
             self.log_yaz(f"\n{'='*50}")
             self.log_yaz(f"Dosya: {os.path.basename(dosya)}")
             self.log_yaz(f"Model: {model_key}")
-            self.log_yaz(f"Zaman Damgası: {'AÇIK' if zaman_damgasi_aktif else 'KAPALI'}")
-            self.log_yaz(f"Anti-Loop: {'AÇIK' if vad_aktif else 'KAPALI'}")
+            self.log_yaz(f"Format: {secilen_format}")
             self.log_yaz(f"{'='*50}\n")
             
             baslangic = time.time()
 
-            # Faster Whisper
+            # --- WHISPER İŞLEMLERİ (Önce TXT'ye yazar) ---
             if "faster" in model_key:
                 from faster_whisper import WhisperModel
                 self.islem_durumu.set("Model Yükleniyor...")
@@ -596,40 +735,32 @@ class WhisperApp:
                     "word_timestamps": False
                 }
                 if vad_aktif:
-                    try: 
-                        transcribe_args["repetition_penalty"] = 1.1
-                    except: 
-                        pass
+                    try: transcribe_args["repetition_penalty"] = 1.1
+                    except: pass
 
                 segments, info = model.transcribe(dosya, **transcribe_args)
                 self.log_yaz(f"Algılanan Dil: {info.language.upper()}\n")
                 
-                with open(cikti, "w", encoding="utf-8") as f:
+                with open(temp_txt_path, "w", encoding="utf-8") as f:
                     for segment in segments:
                         if self.iptal_istendi:
-                            self.log_yaz("\n!!! İŞLEM DURDURULDU !!!")
                             break
-                        
                         if info.duration > 0:
                             yuzde = (segment.end / info.duration) * 100
                             self.progress_guncelle(yuzde)
                         
                         text = segment.text.strip()
-                        
                         if zaman_damgasi_aktif:
                             zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
                             satir = f"{zaman} {text}"
                         else:
                             satir = text
-                        
                         f.write(satir + "\n")
                         self.root.after(0, self.log_yaz, satir)
 
-            # Standard Whisper
-            else:
+            else: # Standard Whisper
                 import whisper
                 self.islem_durumu.set("Model Yükleniyor...")
-                
                 load_arg = (hedef_model_yolu if os.path.exists(hedef_model_yolu) 
                     else model_key.replace("std_","").replace("large","large-v3"))
                 model = whisper.load_model(load_arg, device="cuda")
@@ -639,15 +770,12 @@ class WhisperApp:
                 sys.stderr = yakalayici
                 try:
                     result = model.transcribe(
-                        dosya, 
-                        language=hedef_dil_kodu, 
-                        verbose=False, 
-                        condition_on_previous_text=not vad_aktif, 
-                        no_speech_threshold=0.6
+                        dosya, language=hedef_dil_kodu, verbose=False, 
+                        condition_on_previous_text=not vad_aktif, no_speech_threshold=0.6
                     )
                     
                     if not self.iptal_istendi:
-                        with open(cikti, "w", encoding="utf-8") as f:
+                        with open(temp_txt_path, "w", encoding="utf-8") as f:
                             if zaman_damgasi_aktif:
                                 for segment in result["segments"]:
                                     start = segment["start"]
@@ -659,28 +787,43 @@ class WhisperApp:
                             else:
                                 f.write(result["text"])
                                 self.root.after(0, self.log_yaz, result["text"])
-                                
-                        self.log_yaz("\n✓ Dosya kaydedildi.")
                 finally:
                     sys.stderr = original_stderr
 
             sure = time.time() - baslangic
-            self.log_yaz(f"\n{'='*50}")
-            self.log_yaz(f"Toplam Süre: {sure:.2f} saniye")
-            self.log_yaz(f"{'='*50}")
-            
-            self.progress.stop()
-            self.btn_baslat.config(state="normal")
-            self.btn_iptal.config(state="disabled")
-            
+
+            # --- DÖNÜŞTÜRME VE TEMİZLİK ---
+            islem_basarili = True
             if self.iptal_istendi:
                 self.islem_durumu.set("⚠ Durduruldu")
-                messagebox.showinfo("Bilgi", f"Kısmi kayıt:\n{cikti}")
+                messagebox.showinfo("Bilgi", f"Kısmi kayıt (TXT):\n{temp_txt_path}")
             else:
-                self.islem_durumu.set("✓ Tamamlandı")
+                # Seçilen formata dönüştür
+                if "TXT" in secilen_format:
+                    # Zaten TXT, sadece ismini düzelt
+                    if os.path.exists(nihai_cikti): os.remove(nihai_cikti)
+                    os.rename(temp_txt_path, nihai_cikti)
+                else:
+                    # PDF veya DOCX'e çevir
+                    if self.dosya_donustur(temp_txt_path, nihai_cikti, secilen_format):
+                        os.remove(temp_txt_path) # Temp txt'yi sil
+                    else:
+                        islem_basarili = False
+                        self.log_yaz("! Dönüştürme başarısız olduğu için TXT dosyası korundu.")
+                        nihai_cikti = temp_txt_path # Hata olursa TXT yolunu göster
+
+                self.progress.stop()
                 self.progress['value'] = 100
+                self.btn_baslat.config(state="normal")
+                self.btn_iptal.config(state="disabled")
+                
+                self.islem_durumu.set("✓ Tamamlandı")
+                self.log_yaz(f"\n{'='*50}")
+                self.log_yaz(f"Toplam Süre: {sure:.2f} saniye")
+                self.log_yaz(f"{'='*50}")
+
                 messagebox.showinfo("Başarılı", 
-                    f"İşlem tamamlandı!\n\nDosya: {os.path.basename(cikti)}\n"
+                    f"İşlem tamamlandı!\n\nDosya: {os.path.basename(nihai_cikti)}\n"
                     f"Süre: {sure:.2f} saniye")
 
         except Exception as e:
