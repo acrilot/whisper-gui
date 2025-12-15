@@ -10,16 +10,9 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import warnings
 
-# Gereksiz uyarıları gizle
 warnings.filterwarnings("ignore")
 
-# ============================================================================
-# AYARLAR VE DOSYA YOLLARI
-# ============================================================================
 BASE_DIR = os.getcwd()
-
-# KULLANICI GITHUB AYARI (BURAYI DÜZENLE)
-# FFmpeg kurulumunu yapan .bat dosyanın "Raw" linkini buraya yapıştır.
 GITHUB_FFMPEG_URL = "https://raw.githubusercontent.com/acrilot/whisper-gui/refs/heads/main/install_ffmpeg.bat"
 
 PATHS = {
@@ -49,7 +42,6 @@ LANGUAGE_OPTIONS = {
     "Japonca": "ja"
 }
 
-# --- TQDM YAKALAYICI ---
 class TqdmYakalayici:
     def __init__(self, callback_func):
         self.callback = callback_func
@@ -73,41 +65,97 @@ class TqdmYakalayici:
 class WhisperApp:
     def __init__(self, root):
         self.root = root
-        
-        # 1. Başlangıçta FFmpeg Kontrolü
         self.ffmpeg_kontrol_et_ve_kur()
-
-        self.root.title("Whisper GUI")
-        self.root.geometry("1000x800")
         
-        # Değişkenler
+        self.root.title("Whisper Transkript Çıkarıcı")
+        self.root.geometry("1100x900")
+        self.root.minsize(900, 700)
+        self.root.configure(bg="#f0f0f0")
+        
+        # Variables
         self.secilen_dosya = tk.StringVar()
         self.cikti_konumu = tk.StringVar()
         self.secilen_model_gorunum = tk.StringVar()
         self.secilen_dil_adi = tk.StringVar(value="Otomatik Algıla")
-        
         self.kurulum_modu = tk.BooleanVar(value=False)
         self.anti_loop_modu = tk.BooleanVar(value=True) 
-        
-        # YENİ: Zaman Damgası Seçeneği (Varsayılan: Seçili)
         self.zaman_damgasi_var = tk.BooleanVar(value=True)
-
         self.islem_durumu = tk.StringVar(value="Hazır")
         self.iptal_istendi = False
         self.model_display_map = {} 
 
+        self.setup_styles()
         self.arayuz_olustur()
         self.modelleri_tara_ve_guncelle()
 
+    def setup_styles(self):
+        """Configure modern styles for the application"""
+        style = ttk.Style()
+        style.theme_use('clam')
+        
+        # Color scheme
+        self.colors = {
+            'primary': '#2196F3',
+            'primary_dark': '#1976D2',
+            'success': '#4CAF50',
+            'danger': '#F44336',
+            'warning': '#FF9800',
+            'bg_light': '#FAFAFA',
+            'bg_white': '#FFFFFF',
+            'text_dark': '#212121',
+            'text_light': '#757575',
+            'border': '#E0E0E0'
+        }
+        
+        # Button styles
+        style.configure("Primary.TButton", 
+            background=self.colors['primary'],
+            foreground="white",
+            borderwidth=0,
+            focuscolor='none',
+            padding=(20, 12),
+            font=("Segoe UI", 10, "bold"))
+        style.map("Primary.TButton",
+            background=[('active', self.colors['primary_dark'])])
+        
+        style.configure("Danger.TButton",
+            background=self.colors['danger'],
+            foreground="white",
+            borderwidth=0,
+            focuscolor='none',
+            padding=(20, 12),
+            font=("Segoe UI", 10, "bold"))
+        style.map("Danger.TButton",
+            background=[('active', '#D32F2F')])
+        
+        style.configure("Secondary.TButton",
+            background=self.colors['bg_white'],
+            foreground=self.colors['text_dark'],
+            borderwidth=1,
+            relief="solid",
+            focuscolor='none',
+            padding=(15, 8),
+            font=("Segoe UI", 9))
+        
+        # Frame styles
+        style.configure("Card.TFrame", background=self.colors['bg_white'], relief="flat")
+        style.configure("TLabelframe", background=self.colors['bg_white'], borderwidth=0)
+        style.configure("TLabelframe.Label", background=self.colors['bg_white'], 
+            foreground=self.colors['text_dark'], font=("Segoe UI", 10, "bold"))
+        
+        # Other widgets
+        style.configure("TLabel", background=self.colors['bg_white'], 
+            foreground=self.colors['text_dark'], font=("Segoe UI", 9))
+        style.configure("TCheckbutton", background=self.colors['bg_white'],
+            foreground=self.colors['text_dark'], font=("Segoe UI", 9))
+        style.configure("TCombobox", fieldbackground="white", 
+            background="white", borderwidth=1)
+
     def ffmpeg_kontrol_et_ve_kur(self):
-        """
-        Sistemde FFmpeg var mı bakar. Yoksa Github'dan scripti çeker, kurar ve restart atar.
-        """
+        """Check and install FFmpeg if needed"""
         if shutil.which("ffmpeg"):
-            print("FFmpeg sistemde yüklü.")
             return
 
-        # FFmpeg yoksa kullanıcıya sor
         root = tk.Tk()
         root.withdraw()
         cevap = messagebox.askyesno(
@@ -122,116 +170,246 @@ class WhisperApp:
             return
 
         try:
-            print(">>> FFmpeg Kurulum Scripti İndiriliyor...")
             script_adi = "ffmpeg_installer_temp.bat"
-            
-            # Scripti indir
             urllib.request.urlretrieve(GITHUB_FFMPEG_URL, script_adi)
-            
-            print(">>> Kurulum Başlatılıyor (Lütfen bekleyin)...")
-            # Batch scripti çalıştır (shell=True ile yeni pencerede açabilir veya gizli çalıştırabilirsin)
             subprocess.check_call([script_adi], shell=True)
             
-            print(">>> Kurulum Tamamlandı. Geçici dosya siliniyor...")
             if os.path.exists(script_adi):
                 os.remove(script_adi)
             
-            messagebox.showinfo("Yeniden Başlatılıyor", "FFmpeg kuruldu. Değişikliklerin etkili olması için uygulama yeniden başlatılıyor.")
-            
-            # Uygulamayı Restart Et (Yeni PATH'i görmesi için)
+            messagebox.showinfo("Yeniden Başlatılıyor", 
+                "FFmpeg kuruldu. Değişikliklerin etkili olması için uygulama yeniden başlatılıyor.")
             os.execl(sys.executable, sys.executable, *sys.argv)
 
         except Exception as e:
             messagebox.showerror("Kurulum Hatası", f"Otomatik kurulum başarısız oldu:\n{e}")
-            # Yine de devam etsin mi? Kullanıcıya kalmış.
 
     def arayuz_olustur(self):
-        style = ttk.Style()
-        style.theme_use('clam')
-        style.configure("TButton", padding=6, relief="flat", background="#e1e1e1")
-        style.configure("Accent.TButton", background="#2f80ed", foreground="white", font=("Segoe UI", 10, "bold"))
-        style.configure("Cancel.TButton", background="#d9534f", foreground="white", font=("Segoe UI", 10, "bold"))
+        """Create the modern GUI interface"""
+        # Main container with padding
+        main_container = tk.Frame(self.root, bg="#f0f0f0")
+        main_container.pack(fill="both", expand=True, padx=20, pady=20)
         
-        # --- ÜST PANEL ---
-        frame_top = ttk.LabelFrame(self.root, text="Model ve Dil Ayarları", padding=15)
-        frame_top.pack(fill="x", padx=15, pady=10)
-
-        # Satır 1: Model ve Dil
-        ttk.Label(frame_top, text="Model:").grid(row=0, column=0, sticky="w", padx=5)
-        self.combo_model = ttk.Combobox(frame_top, textvariable=self.secilen_model_gorunum, state="readonly", width=50)
-        self.combo_model.grid(row=0, column=1, sticky="w", padx=5)
-
-        ttk.Label(frame_top, text="Dil:").grid(row=0, column=2, sticky="w", padx=15)
-        self.combo_lang = ttk.Combobox(frame_top, textvariable=self.secilen_dil_adi, values=list(LANGUAGE_OPTIONS.keys()), state="readonly", width=15)
-        self.combo_lang.grid(row=0, column=3, sticky="w", padx=5)
-
-        # Satır 2: Checkboxlar
-        frame_checks = ttk.Frame(frame_top)
-        frame_checks.grid(row=1, column=0, columnspan=4, sticky="w", pady=(10, 0))
-
-        # Anti-Loop
-        chk_loop = ttk.Checkbutton(frame_checks, text="Anti-Loop (VAD)", variable=self.anti_loop_modu)
-        chk_loop.pack(side="left", padx=5)
-
-        # YENİ: Zaman Damgası
-        chk_time = ttk.Checkbutton(frame_checks, text="Zaman Damgası Ekle", variable=self.zaman_damgasi_var)
-        chk_time.pack(side="left", padx=15)
-
-        # Onarım Modu
-        chk_setup = ttk.Checkbutton(frame_checks, text="İlk Kullanım", variable=self.kurulum_modu)
-        chk_setup.pack(side="left", padx=15)
+        # Header
+        self.create_header(main_container)
         
-        # --- ORTA PANEL ---
-        frame_mid = ttk.LabelFrame(self.root, text="Dosya İşlemleri", padding=15)
-        frame_mid.pack(fill="x", padx=15, pady=5)
-
-        ttk.Label(frame_mid, text="Dosya:").grid(row=0, column=0, sticky="w")
-        ttk.Entry(frame_mid, textvariable=self.secilen_dosya, width=70).grid(row=0, column=1, padx=5)
-        ttk.Button(frame_mid, text="Seç", command=self.dosya_sec).grid(row=0, column=2, padx=5)
-
-        ttk.Label(frame_mid, text="Kayıt:").grid(row=1, column=0, sticky="w", pady=10)
-        ttk.Entry(frame_mid, textvariable=self.cikti_konumu, width=70).grid(row=1, column=1, padx=5, pady=10)
-        ttk.Button(frame_mid, text="Değiştir", command=self.kayit_yeri_sec).grid(row=1, column=2, padx=5, pady=10)
-
-        # --- ALT PANEL ---
-        frame_bottom = ttk.Frame(self.root, padding=15)
-        frame_bottom.pack(fill="both", expand=True, padx=15)
-
-        btn_frame = ttk.Frame(frame_bottom)
-        btn_frame.pack(fill="x", pady=5)
-
-        self.btn_baslat = ttk.Button(btn_frame, text="BAŞLAT", command=self.islem_baslat, style="Accent.TButton")
-        self.btn_baslat.pack(side="left", fill="x", expand=True, padx=(0, 5))
-
-        self.btn_iptal = ttk.Button(btn_frame, text="DURDUR & KAYDET", command=self.iptal_et, style="Cancel.TButton", state="disabled")
-        self.btn_iptal.pack(side="right", fill="x", expand=True, padx=(5, 0))
-
-        self.progress = ttk.Progressbar(frame_bottom, orient="horizontal", length=100, mode="determinate")
-        self.progress.pack(fill="x", pady=10)
+        # File selection section
+        self.create_file_section(main_container)
         
-        self.lbl_durum = ttk.Label(frame_bottom, textvariable=self.islem_durumu, font=("Segoe UI", 9, "bold"), foreground="#555")
-        self.lbl_durum.pack(anchor="w")
-
-        self.txt_log = tk.Text(frame_bottom, height=12, font=("Consolas", 9), bg="#f8f9fa", borderwidth=1, relief="solid")
-        self.txt_log.pack(fill="both", expand=True, pady=5)
+        # Settings section
+        self.create_settings_section(main_container)
         
-        scrollbar = ttk.Scrollbar(frame_bottom, orient="vertical", command=self.txt_log.yview)
+        # Control buttons
+        self.create_control_section(main_container)
+        
+        # Progress section
+        self.create_progress_section(main_container)
+        
+        # Log section
+        self.create_log_section(main_container)
+
+    def create_header(self, parent):
+        """Create header section"""
+        header_frame = tk.Frame(parent, bg=self.colors['primary'], height=70)
+        header_frame.pack(fill="x", pady=(0, 15))
+        header_frame.pack_propagate(False)
+        
+        title_label = tk.Label(header_frame, 
+            text="🎙️ Whisper Transkript Çevirici",
+            font=("Segoe UI", 18, "bold"),
+            bg=self.colors['primary'],
+            fg="white")
+        title_label.pack(side="left", padx=20, pady=15)
+        
+        subtitle_label = tk.Label(header_frame,
+            text="Ses ve video dosyalarınızı metne dönüştürün",
+            font=("Segoe UI", 10),
+            bg=self.colors['primary'],
+            fg="white")
+        subtitle_label.pack(side="left", padx=(0, 20))
+
+    def create_file_section(self, parent):
+        """Create file selection section"""
+        file_frame = ttk.LabelFrame(parent, text="📁 Dosya Seçimi", padding=15, style="Card.TFrame")
+        file_frame.pack(fill="x", pady=(0, 10))
+        
+        # Input file
+        input_container = tk.Frame(file_frame, bg=self.colors['bg_white'])
+        input_container.pack(fill="x", pady=(0, 10))
+        
+        tk.Label(input_container, text="Kaynak Dosya:", 
+            font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white'],
+            fg=self.colors['text_dark']).pack(anchor="w", pady=(0, 5))
+        
+        input_row = tk.Frame(input_container, bg=self.colors['bg_white'])
+        input_row.pack(fill="x")
+        
+        entry_input = tk.Entry(input_row, textvariable=self.secilen_dosya,
+            font=("Segoe UI", 9), relief="solid", borderwidth=1)
+        entry_input.pack(side="left", fill="x", expand=True, ipady=8)
+        
+        btn_browse = ttk.Button(input_row, text="Dosya Seç", 
+            command=self.dosya_sec, style="Secondary.TButton")
+        btn_browse.pack(side="right", padx=(10, 0))
+        
+        # Output file
+        output_container = tk.Frame(file_frame, bg=self.colors['bg_white'])
+        output_container.pack(fill="x")
+        
+        tk.Label(output_container, text="Çıktı Dosyası:", 
+            font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white'],
+            fg=self.colors['text_dark']).pack(anchor="w", pady=(0, 5))
+        
+        output_row = tk.Frame(output_container, bg=self.colors['bg_white'])
+        output_row.pack(fill="x")
+        
+        entry_output = tk.Entry(output_row, textvariable=self.cikti_konumu,
+            font=("Segoe UI", 9), relief="solid", borderwidth=1)
+        entry_output.pack(side="left", fill="x", expand=True, ipady=8)
+        
+        btn_save = ttk.Button(output_row, text="Değiştir",
+            command=self.kayit_yeri_sec, style="Secondary.TButton")
+        btn_save.pack(side="right", padx=(10, 0))
+
+    def create_settings_section(self, parent):
+        """Create settings section"""
+        settings_frame = ttk.LabelFrame(parent, text="⚙️ Ayarlar", padding=15, style="Card.TFrame")
+        settings_frame.pack(fill="x", pady=(0, 10))
+        
+        # Model and language selection
+        selection_frame = tk.Frame(settings_frame, bg=self.colors['bg_white'])
+        selection_frame.pack(fill="x", pady=(0, 10))
+        
+        # Model selection
+        model_frame = tk.Frame(selection_frame, bg=self.colors['bg_white'])
+        model_frame.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        tk.Label(model_frame, text="Model:", font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white']).pack(anchor="w", pady=(0, 5))
+        self.combo_model = ttk.Combobox(model_frame, 
+            textvariable=self.secilen_model_gorunum,
+            state="readonly", font=("Segoe UI", 9))
+        self.combo_model.pack(fill="x", ipady=5)
+        
+        # Language selection
+        lang_frame = tk.Frame(selection_frame, bg=self.colors['bg_white'])
+        lang_frame.pack(side="left", fill="x", expand=True)
+        
+        tk.Label(lang_frame, text="Dil:", font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white']).pack(anchor="w", pady=(0, 5))
+        self.combo_lang = ttk.Combobox(lang_frame,
+            textvariable=self.secilen_dil_adi,
+            values=list(LANGUAGE_OPTIONS.keys()),
+            state="readonly", font=("Segoe UI", 9))
+        self.combo_lang.pack(fill="x", ipady=5)
+        
+        # Options checkboxes
+        options_frame = tk.Frame(settings_frame, bg=self.colors['bg_white'])
+        options_frame.pack(fill="x")
+        
+        tk.Label(options_frame, text="Seçenekler:", font=("Segoe UI", 9, "bold"),
+            bg=self.colors['bg_white']).pack(anchor="w", pady=(0, 8))
+        
+        checks_container = tk.Frame(options_frame, bg=self.colors['bg_white'])
+        checks_container.pack(fill="x")
+        
+        chk_vad = ttk.Checkbutton(checks_container, 
+            text="🔄 Anti-Loop (VAD)",
+            variable=self.anti_loop_modu)
+        chk_vad.pack(side="left", padx=(0, 20))
+        
+        chk_time = ttk.Checkbutton(checks_container,
+            text="🕐 Zaman Damgası",
+            variable=self.zaman_damgasi_var)
+        chk_time.pack(side="left", padx=(0, 20))
+        
+        chk_setup = ttk.Checkbutton(checks_container,
+            text="🔧 İlk Kullanım (Kurulum)",
+            variable=self.kurulum_modu)
+        chk_setup.pack(side="left")
+
+    def create_control_section(self, parent):
+        """Create control buttons section"""
+        control_frame = tk.Frame(parent, bg="#f0f0f0")
+        control_frame.pack(fill="x", pady=(0, 10))
+        
+        self.btn_baslat = ttk.Button(control_frame, 
+            text="▶ BAŞLAT",
+            command=self.islem_baslat,
+            style="Primary.TButton")
+        self.btn_baslat.pack(side="left", fill="x", expand=True, padx=(0, 10))
+        
+        self.btn_iptal = ttk.Button(control_frame,
+            text="⏹ DURDUR & KAYDET",
+            command=self.iptal_et,
+            style="Danger.TButton",
+            state="disabled")
+        self.btn_iptal.pack(side="left", fill="x", expand=True)
+
+    def create_progress_section(self, parent):
+        """Create progress section"""
+        progress_frame = ttk.LabelFrame(parent, text="📊 İlerleme", 
+            padding=15, style="Card.TFrame")
+        progress_frame.pack(fill="x", pady=(0, 10))
+        
+        # Status label
+        self.lbl_durum = tk.Label(progress_frame,
+            textvariable=self.islem_durumu,
+            font=("Segoe UI", 10, "bold"),
+            bg=self.colors['bg_white'],
+            fg=self.colors['primary'])
+        self.lbl_durum.pack(anchor="w", pady=(0, 8))
+        
+        # Progress bar
+        self.progress = ttk.Progressbar(progress_frame,
+            orient="horizontal",
+            mode="determinate",
+            length=400)
+        self.progress.pack(fill="x")
+
+    def create_log_section(self, parent):
+        """Create log section"""
+        log_frame = ttk.LabelFrame(parent, text="📝 İşlem Kayıtları",
+            padding=15, style="Card.TFrame")
+        log_frame.pack(fill="both", expand=True)
+        
+        # Log text widget with scrollbar
+        log_container = tk.Frame(log_frame, bg=self.colors['bg_white'])
+        log_container.pack(fill="both", expand=True)
+        
+        scrollbar = tk.Scrollbar(log_container)
         scrollbar.pack(side="right", fill="y")
-        self.txt_log.configure(yscrollcommand=scrollbar.set)
+        
+        self.txt_log = tk.Text(log_container,
+            font=("Consolas", 9),
+            bg="#FAFAFA",
+            fg=self.colors['text_dark'],
+            relief="flat",
+            yscrollcommand=scrollbar.set,
+            wrap="word",
+            height=15,
+            padx=10,
+            pady=10)
+        self.txt_log.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=self.txt_log.yview)
 
     def log_yaz(self, mesaj):
+        """Write message to log"""
         self.txt_log.insert(tk.END, mesaj + "\n")
         self.txt_log.see(tk.END)
 
     def modelleri_tara_ve_guncelle(self):
+        """Scan and update available models"""
         self.model_display_map = {}
         yeni_liste = []
         varsayilan_secim = ""
 
         for friendly_name, model_key in RAW_MODEL_OPTIONS.items():
             path = PATHS[model_key]
-            durum_ikonu = "HAZIR" if os.path.exists(path) else "İNDİRİLECEK"
-            display_text = f"{friendly_name} [{durum_ikonu}]"
+            durum_ikonu = "✓" if os.path.exists(path) else "⬇"
+            display_text = f"{durum_ikonu} {friendly_name}"
             
             self.model_display_map[display_text] = model_key
             yeni_liste.append(display_text)
@@ -246,7 +424,13 @@ class WhisperApp:
             self.combo_model.current(0)
 
     def dosya_sec(self):
-        dosya = filedialog.askopenfilename(filetypes=[("Medya", "*.mp3 *.wav *.m4a *.mp4 *.mkv *.flac *.ogg *.webm *.opus"), ("Tümü", "*.*")])
+        """Select input file"""
+        dosya = filedialog.askopenfilename(
+            title="Ses veya Video Dosyası Seçin",
+            filetypes=[
+                ("Medya Dosyaları", "*.mp3 *.wav *.m4a *.mp4 *.mkv *.flac *.ogg *.webm *.opus"),
+                ("Tümü", "*.*")
+            ])
         if dosya:
             self.secilen_dosya.set(dosya)
             klasor, isim = os.path.split(dosya)
@@ -254,23 +438,30 @@ class WhisperApp:
             self.cikti_konumu.set(os.path.join(klasor, f"{isim_kok}_transkript.txt"))
 
     def kayit_yeri_sec(self):
-        dosya = filedialog.asksaveasfilename(defaultextension=".txt", filetypes=[("Metin Dosyası", "*.txt")])
+        """Select output file"""
+        dosya = filedialog.asksaveasfilename(
+            title="Çıktı Dosyasını Kaydet",
+            defaultextension=".txt",
+            filetypes=[("Metin Dosyası", "*.txt")])
         if dosya:
             self.cikti_konumu.set(dosya)
 
     def progress_guncelle(self, yuzde):
+        """Update progress bar"""
         self.progress['value'] = yuzde
         self.islem_durumu.set(f"İşleniyor... %{yuzde:.1f}")
         self.root.update_idletasks()
 
     def iptal_et(self):
+        """Cancel operation"""
         if messagebox.askyesno("Durdur", "İşlem durdurulsun ve kaydedilsin mi?"):
             self.iptal_istendi = True
             self.btn_iptal.config(state="disabled")
 
     def islem_baslat(self):
+        """Start transcription process"""
         if not self.secilen_dosya.get():
-            messagebox.showwarning("Uyarı", "Dosya seçilmedi.")
+            messagebox.showwarning("Uyarı", "Lütfen bir dosya seçin.")
             return
         
         self.btn_baslat.config(state="disabled")
@@ -279,31 +470,52 @@ class WhisperApp:
         self.progress['value'] = 0
         self.iptal_istendi = False
         
-        t = threading.Thread(target=self.worker_thread)
+        t = threading.Thread(target=self.worker_thread, daemon=True)
         t.start()
 
     def worker_thread(self):
+        """Worker thread for transcription"""
         original_stderr = sys.stderr
         
         try:
-            # 1. ONARIM MODU
+            # Setup mode
             if self.kurulum_modu.get():
                 self.log_yaz(">>> KURULUM BAŞLADI...")
                 libs = ["openai-whisper", "faster-whisper", "huggingface_hub"]
+                
+                # 1. Standart Kütüphaneler
                 for lib in libs:
                     self.log_yaz(f"   -> Kontrol: {lib}")
-                    subprocess.run([sys.executable, "-m", "pip", "install", lib, "--upgrade"], capture_output=True)
+                    try:
+                        # check=True ekledik: Hata olursa Exception fırlatır
+                        # text=True ekledik: Çıktıyı okunabilir metin yapar
+                        result = subprocess.run(
+                            [sys.executable, "-m", "pip", "install", lib], 
+                            capture_output=True, 
+                            text=True, 
+                            check=True
+                        )
+                    except subprocess.CalledProcessError as e:
+                        self.log_yaz(f"!!! HATA: {lib} kurulamadı!")
+                        self.log_yaz(f"Hata Detayı: {e.stderr}")
+                        raise Exception(f"{lib} kurulumu başarısız oldu.") # İşlemi tamamen durdur
 
+                # 2. PyTorch (CUDA)
                 self.log_yaz("   -> Kontrol: PyTorch (CUDA)")
-                subprocess.run([
-                    sys.executable, "-m", "pip", "install", 
-                    "torch", "torchvision", "torchaudio", 
-                    "--index-url", "https://download.pytorch.org/whl/cu121", 
-                    "--upgrade"
-                ], capture_output=True)
-                self.log_yaz(">>> Kurulum bitti.")
+                try:
+                    subprocess.run([
+                        sys.executable, "-m", "pip", "install", 
+                        "torch", "torchvision", "torchaudio", 
+                        "--index-url", "https://download.pytorch.org/whl/cu124"
+                    ], capture_output=True, text=True, check=True)
+                except subprocess.CalledProcessError as e:
+                    self.log_yaz("!!! HATA: PyTorch kurulamadı!")
+                    self.log_yaz(f"Hata Detayı: {e.stderr}")
+                    raise Exception("PyTorch kurulumu başarısız oldu.")
 
-            # 2. MODEL HAZIRLIĞI
+                self.log_yaz(">>> Kurulum bitti.\n")
+
+            # Model preparation
             gorunen_isim = self.secilen_model_gorunum.get()
             model_key = self.model_display_map[gorunen_isim]
             hedef_model_yolu = PATHS[model_key]
@@ -314,31 +526,64 @@ class WhisperApp:
                 
                 if "faster" in model_key:
                     from faster_whisper import download_model
-                    repo_id = "deepdml/faster-whisper-large-v3-turbo-ct2" if "turbo" in model_key else "deepdml/faster-whisper-large-v3-ct2"
+                    repo_id = ("turbo" if "turbo" in model_key 
+                        else "large-v3")
                     download_model(repo_id, output_dir=hedef_model_yolu)
                     self.log_yaz("İndirme tamamlandı!")
                     self.root.after(0, self.modelleri_tara_ve_guncelle)
                 else:
-                    self.log_yaz("Standart model önbelleğe indirilecek...")
+                    self.log_yaz(f"Standart model indiriliyor: {model_key}...")
+                    # Whisper'ın kendi indirme fonksiyonunu kullanmıyoruz çünkü yolu biz seçmek istiyoruz
+                    import whisper
+                    
+                    # Model ismini düzelt (std_large -> large-v3)
+                    _model_name = model_key.replace("std_", "").replace("large", "large-v3")
+                    
+                    # Whisper'ın download fonksiyonunu kullanarak belirttiğimiz yola indiriyoruz
+                    # Not: Bu işlem standart kütüphanede public değildir, manuel URL'den çekmek daha garantidir 
+                    # veya kütüphanenin varsayılan davranışına izin verip PATH kontrolünü kaldırmalısınız.
+                    
+                    # EN TEMİZ YÖNTEM: Kütüphanenin kendi yapısını kullanmak
+                    # Ancak dosyayı sizin istediğiniz PATHS konumuna kopyalamak için:
+                    url = whisper._MODELS[_model_name]
+                    import urllib.request
+                    from tqdm import tqdm
 
-            # 3. TRANSKRİPT
+                    # İndirme çubuğu ile indirme (Basit örnek)
+                    try:
+                        with tqdm(unit='B', unit_scale=True, miniters=1, desc=_model_name) as t:
+                            def reporthook(blocknum, blocksize, totalsize):
+                                t.total = totalsize
+                                t.update(blocknum * blocksize - t.n)
+                                # GUI'yi güncellemek isterseniz callback ekleyin
+                                
+                            urllib.request.urlretrieve(url, hedef_model_yolu, reporthook=reporthook)
+                        self.log_yaz("İndirme tamamlandı!")
+                    except Exception as e:
+                        self.log_yaz(f"İndirme hatası: {e}")
+
+            # Transcription
             hedef_dil_kodu = LANGUAGE_OPTIONS[self.secilen_dil_adi.get()]
             dosya = self.secilen_dosya.get()
             cikti = self.cikti_konumu.get()
             vad_aktif = self.anti_loop_modu.get()
-            zaman_damgasi_aktif = self.zaman_damgasi_var.get() # YENİ
+            zaman_damgasi_aktif = self.zaman_damgasi_var.get()
 
+            self.log_yaz(f"\n{'='*50}")
             self.log_yaz(f"Dosya: {os.path.basename(dosya)}")
             self.log_yaz(f"Model: {model_key}")
             self.log_yaz(f"Zaman Damgası: {'AÇIK' if zaman_damgasi_aktif else 'KAPALI'}")
+            self.log_yaz(f"Anti-Loop: {'AÇIK' if vad_aktif else 'KAPALI'}")
+            self.log_yaz(f"{'='*50}\n")
             
             baslangic = time.time()
 
-            # --- FASTER WHISPER BLOĞU ---
+            # Faster Whisper
             if "faster" in model_key:
                 from faster_whisper import WhisperModel
                 self.islem_durumu.set("Model Yükleniyor...")
-                model = WhisperModel(hedef_model_yolu, device="cuda", compute_type="int8", local_files_only=True)
+                model = WhisperModel(hedef_model_yolu, device="cuda", 
+                    compute_type="int8", local_files_only=True)
                 
                 self.islem_durumu.set("Çıkarılıyor...")
                 
@@ -351,16 +596,18 @@ class WhisperApp:
                     "word_timestamps": False
                 }
                 if vad_aktif:
-                    try: transcribe_args["repetition_penalty"] = 1.1
-                    except: pass
+                    try: 
+                        transcribe_args["repetition_penalty"] = 1.1
+                    except: 
+                        pass
 
                 segments, info = model.transcribe(dosya, **transcribe_args)
-                self.log_yaz(f"Dil: {info.language.upper()}")
+                self.log_yaz(f"Algılanan Dil: {info.language.upper()}\n")
                 
                 with open(cikti, "w", encoding="utf-8") as f:
                     for segment in segments:
                         if self.iptal_istendi:
-                            self.log_yaz("\n!!! DURDURULDU !!!")
+                            self.log_yaz("\n!!! İŞLEM DURDURULDU !!!")
                             break
                         
                         if info.duration > 0:
@@ -369,7 +616,6 @@ class WhisperApp:
                         
                         text = segment.text.strip()
                         
-                        # ZAMAN DAMGASI KONTROLÜ
                         if zaman_damgasi_aktif:
                             zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
                             satir = f"{zaman} {text}"
@@ -379,13 +625,13 @@ class WhisperApp:
                         f.write(satir + "\n")
                         self.root.after(0, self.log_yaz, satir)
 
-            # --- STANDART WHISPER BLOĞU ---
+            # Standard Whisper
             else:
                 import whisper
                 self.islem_durumu.set("Model Yükleniyor...")
                 
-                # Standart model ismi (path yoksa ismi kullan)
-                load_arg = hedef_model_yolu if os.path.exists(hedef_model_yolu) else model_key.replace("std_","").replace("large","large-v3")
+                load_arg = (hedef_model_yolu if os.path.exists(hedef_model_yolu) 
+                    else model_key.replace("std_","").replace("large","large-v3"))
                 model = whisper.load_model(load_arg, device="cuda")
                 self.islem_durumu.set("Çıkarılıyor...")
                 
@@ -402,38 +648,48 @@ class WhisperApp:
                     
                     if not self.iptal_istendi:
                         with open(cikti, "w", encoding="utf-8") as f:
-                            # ZAMAN DAMGASI KONTROLÜ (STANDART MODEL İÇİN)
                             if zaman_damgasi_aktif:
-                                # Standart modelde zaman damgası için 'segments' içinde dönmeliyiz
                                 for segment in result["segments"]:
                                     start = segment["start"]
                                     text = segment["text"].strip()
                                     zaman = f"[{int(start//60):02}:{int(start%60):02}]"
-                                    f.write(f"{zaman} {text}\n")
+                                    satir = f"{zaman} {text}"
+                                    f.write(satir + "\n")
+                                    self.root.after(0, self.log_yaz, satir)
                             else:
-                                # Sadece metin isteniyorsa raw text yeterli
                                 f.write(result["text"])
+                                self.root.after(0, self.log_yaz, result["text"])
                                 
-                        self.log_yaz("Dosya kaydedildi.")
+                        self.log_yaz("\n✓ Dosya kaydedildi.")
                 finally:
                     sys.stderr = original_stderr
 
+            sure = time.time() - baslangic
+            self.log_yaz(f"\n{'='*50}")
+            self.log_yaz(f"Toplam Süre: {sure:.2f} saniye")
+            self.log_yaz(f"{'='*50}")
+            
             self.progress.stop()
             self.btn_baslat.config(state="normal")
             self.btn_iptal.config(state="disabled")
             
             if self.iptal_istendi:
-                self.islem_durumu.set("Durduruldu.")
+                self.islem_durumu.set("⚠ Durduruldu")
                 messagebox.showinfo("Bilgi", f"Kısmi kayıt:\n{cikti}")
             else:
-                self.islem_durumu.set("Tamamlandı.")
+                self.islem_durumu.set("✓ Tamamlandı")
                 self.progress['value'] = 100
-                messagebox.showinfo("Başarılı", "İşlem tamamlandı.")
+                messagebox.showinfo("Başarılı", 
+                    f"İşlem tamamlandı!\n\nDosya: {os.path.basename(cikti)}\n"
+                    f"Süre: {sure:.2f} saniye")
 
         except Exception as e:
             sys.stderr = original_stderr
-            self.islem_durumu.set("Hata!")
-            self.log_yaz(f"\nHATA: {str(e)}")
+            self.islem_durumu.set("❌ Hata!")
+            self.log_yaz(f"\n{'='*50}")
+            self.log_yaz(f"HATA: {str(e)}")
+            self.log_yaz(f"{'='*50}")
+            messagebox.showerror("Hata", f"Bir hata oluştu:\n\n{str(e)}")
             self.btn_baslat.config(state="normal")
             self.btn_iptal.config(state="disabled")
 
