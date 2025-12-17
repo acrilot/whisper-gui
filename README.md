@@ -1,6 +1,8 @@
 # Whisper GUI - Transkript Çıkarma Aracı
 Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını metne dönüştüren (transkript çıkaran) kullanıcı dostu bir masaüstü uygulamasıdır. Faster-Whisper ve standart Whisper kütüphanelerini destekler, NVIDIA CUDA hızlandırması ile kısa sürede ve çevrimdışı olarak çeviri yapar ve çıktıları TXT, PDF veya DOCX formatında kaydeder.
 
+<img width="1920" height="1050" alt="GUI" src="https://github.com/user-attachments/assets/ad4694da-911a-44af-b52c-812bda8ec591" />
+
 > [!WARNING]
 > ### ⚠️ DİKKAT: YÜKSEK VERİ KULLANIMI VE GPU GEREKSİNİMİ
 >  * Veri Kullanımı: Bu uygulama ilk kurulumda PyTorch (CUDA destekli) ve Yapay Zeka modellerini indireceği için 4GB - 8GB arasında internet verisi kullanabilir. Lütfen kurulumu kotasız bir internet bağlantısında yapınız.
