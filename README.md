@@ -1,7 +1,7 @@
 # Whisper GUI - Transkript Çıkarma Aracı
 Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını metne dönüştüren (transkript çıkaran) kullanıcı dostu bir masaüstü uygulamasıdır. Faster-Whisper ve standart Whisper kütüphanelerini destekler, NVIDIA CUDA hızlandırması ile kısa sürede ve çevrimdışı olarak çeviri yapar ve çıktıları TXT, PDF veya DOCX formatında kaydeder.
 
-<img width="1920" height="1050" alt="GUI" src="https://github.com/user-attachments/assets/ad4694da-911a-44af-b52c-812bda8ec591" />
+<img width="1920" height="1001" alt="GUI_v8" src="https://github.com/user-attachments/assets/1b942cc6-6ccc-42bd-85b8-46b32d243c36" />
 
 > [!WARNING]
 > ### ⚠️ DİKKAT: YÜKSEK VERİ KULLANIMI VE GPU GEREKSİNİMİ
@@ -9,7 +9,7 @@ Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını m
 >  * Donanım: Bu sürüm NVIDIA Ekran Kartı (GPU) gerektirir. Sadece işlemci (CPU) ile çalıştırılması önerilmez ve kod yapısı gereği CUDA çekirdeklerini arar.
 
 ## Özellikler
- * Çoklu Format Desteği: Çıktılarınızı .txt, .pdf veya .docx (Word) olarak alabilirsiniz.
+ * Çoklu Format Desteği: Çıktılarınızı .txt, .pdf, .docx (Word) veya .xml (Altyazı) olarak alabilirsiniz.
  * Gelişmiş Modeller:
    * Faster-Whisper: Optimize edilmiş, çok daha hızlı ve bellek dostu.
    * Standart Whisper: Orijinal OpenAI modelleri.
@@ -17,6 +17,7 @@ Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını m
  * FFmpeg Yönetimi: Sistemde FFmpeg yoksa otomatik algılar ve indirir.
  * Anti-Loop (VAD) Filtresi: Sessiz anlarda yapay zekanın takılmasını (halüsinasyon görmesini) engeller.
  * Zaman Damgası: İsteğe bağlı olarak her cümlenin başına [00:15] formatında süre ekler.
+ * Tek Blok Metin: Çıktıyı tek bir paragraf halinde verir.
  * Kullanıcı Dostu Arayüz: Modern ve basit arayüz tasarımı.
 
 ## Ön Gereksinimler (Kurulumdan Önce)
