@@ -6,6 +6,11 @@ import subprocess
 import re
 import shutil
 import urllib.request
+import ctypes
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    ctypes.windll.user32.SetProcessDPIAware()
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import warnings
@@ -45,7 +50,7 @@ LANGUAGE_OPTIONS = {
     "Japonca": "ja"
 }
 
-FORMAT_OPTIONS = ["PDF", "DOCX", "TXT"]
+FORMAT_OPTIONS = ["PDF", "DOCX", "XML (Altyazı)", "TXT"]
 
 class TqdmYakalayici:
     def __init__(self, callback_func):
@@ -74,16 +79,17 @@ class WhisperApp:
         
         self.root.title("Whisper Transkript Çıkarıcı")
         self.root.geometry("1100x900")
-        self.root.state('zoomed')
+        self.root.state('zoomed') 
         self.root.minsize(900, 700)
         self.root.configure(bg="#f0f0f0")
         
         # Variables
         self.secilen_dosya = tk.StringVar()
         self.cikti_konumu = tk.StringVar()
-        self.secilen_format = tk.StringVar(value=FORMAT_OPTIONS[0]) # Varsayılan TXT
+        self.secilen_format = tk.StringVar(value=FORMAT_OPTIONS[0]) 
         self.secilen_model_gorunum = tk.StringVar()
         self.secilen_dil_adi = tk.StringVar(value="Otomatik Algıla")
+        
         self.kurulum_modu = tk.BooleanVar(value=False)
         self.tek_blok_modu = tk.BooleanVar(value=True)
         self.anti_loop_modu = tk.BooleanVar(value=True) 
@@ -126,7 +132,7 @@ class WhisperApp:
         style.map("Primary.TButton",
             background=[('active', self.colors['primary_dark'])])
         
-        style.configure("Danger.TButton",
+        style.configure("Danger.TButton", 
             background=self.colors['danger'],
             foreground="white",
             borderwidth=0,
@@ -202,61 +208,15 @@ class WhisperApp:
         if self.zaman_damgasi_var.get():
             self.tek_blok_modu.set(False)
 
-    '''def arayuz_olustur(self):
-        """Create the modern GUI interface"""
-        # Main container with padding
-        main_container = tk.Frame(self.root, bg="#f0f0f0")
-        main_container.pack(fill="both", expand=True, padx=20, pady=20)
-        
-        # Header
-        self.create_header(main_container)
-        
-        # File selection section
-        self.create_file_section(main_container)
-        
-        # Settings section
-        self.create_settings_section(main_container)
-        
-        # Control buttons
-        self.create_control_section(main_container)
-        
-        # Progress section
-        self.create_progress_section(main_container)
-        
-        # Log section
-        self.create_log_section(main_container)
-
-    def create_header(self, parent):
-        """Create header section"""
-        header_frame = tk.Frame(parent, bg=self.colors['primary'], height=70)
-        header_frame.pack(fill="x", pady=(0, 15))
-        header_frame.pack_propagate(False)
-        
-        title_label = tk.Label(header_frame, 
-            text="🎙️ Whisper Transkript Çevirici",
-            font=("Segoe UI", 18, "bold"),
-            bg=self.colors['primary'],
-            fg="white")
-        title_label.pack(side="left", padx=20, pady=15)
-        
-        subtitle_label = tk.Label(header_frame,
-            text="Ses ve video dosyalarınızı metne dönüştürün",
-            font=("Segoe UI", 10),
-            bg=self.colors['primary'],
-            fg="white")
-        subtitle_label.pack(side="left", padx=(0, 20))'''
-    
     def arayuz_olustur(self):
-        """Modern Split Layout Interface - Hepsi Yukarı Hizalı"""
-        # 1. ÜST BAŞLIK
+        """Modern Split Layout Interface"""
         self.create_header(self.root)
         
-        # 2. ANA GÖVDE
         main_body = tk.Frame(self.root, bg="#f0f0f0")
         main_body.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
         # --- SOL PANEL ---
-        left_panel = tk.Frame(main_body, bg="#f0f0f0", width=700)
+        left_panel = tk.Frame(main_body, bg="#f0f0f0", width=900)
         left_panel.pack(side="left", fill="y", padx=(0, 15))
         left_panel.pack_propagate(False)
 
@@ -264,7 +224,7 @@ class WhisperApp:
         right_panel = tk.Frame(main_body, bg="#f0f0f0")
         right_panel.pack(side="left", fill="both", expand=True)
 
-        # SOL İÇERİK KONTEYNERİ
+        # SOL İÇERİK
         left_content = tk.Frame(left_panel, bg="#f0f0f0")
         left_content.pack(side="top", fill="x")
         
@@ -273,12 +233,13 @@ class WhisperApp:
         self.create_progress_section(left_content)
         self.create_control_section(left_content)
 
+        # SAĞ PANEL İÇERİĞİ (Loglar)
         self.create_log_section(right_panel)
 
     def create_header(self, parent):
         """Create header section"""
-        header_frame = tk.Frame(parent, bg=self.colors['primary'], height=80) 
-        header_frame.pack(side="top", fill="x", pady=(0, 20)) 
+        header_frame = tk.Frame(parent, bg=self.colors['primary'], height=80)
+        header_frame.pack(side="top", fill="x", pady=(0, 20))
         header_frame.pack_propagate(False)
         
         title_container = tk.Frame(header_frame, bg=self.colors['primary'])
@@ -295,7 +256,7 @@ class WhisperApp:
             text="Ses ve video dosyalarınızı metne dönüştürün",
             font=("Segoe UI", 11),
             bg=self.colors['primary'],
-            fg="#E3F2FD") # Biraz daha açık bir beyaz tonu
+            fg="#E3F2FD")
         subtitle_label.pack(side="right", pady=25)
 
     def create_file_section(self, parent):
@@ -303,7 +264,6 @@ class WhisperApp:
         file_frame = ttk.LabelFrame(parent, text="📁 Dosya ve Format Seçimi", padding=15, style="Card.TFrame")
         file_frame.pack(fill="x", pady=(0, 10))
         
-        # Input file
         input_container = tk.Frame(file_frame, bg=self.colors['bg_white'])
         input_container.pack(fill="x", pady=(0, 10))
         
@@ -323,15 +283,13 @@ class WhisperApp:
             command=self.dosya_sec, style="Secondary.TButton")
         btn_browse.pack(side="right", padx=(10, 0))
         
-        # Output options row (Format + File Path)
         output_container = tk.Frame(file_frame, bg=self.colors['bg_white'])
         output_container.pack(fill="x")
         
-        # Alt alta yerine yan yana düzen için frame
         out_opts_row = tk.Frame(output_container, bg=self.colors['bg_white'])
         out_opts_row.pack(fill="x")
 
-        # Format Selection (Sol taraf)
+        # Format Selection
         format_frame = tk.Frame(out_opts_row, bg=self.colors['bg_white'])
         format_frame.pack(side="left", padx=(0, 10))
         
@@ -346,7 +304,7 @@ class WhisperApp:
         self.combo_format.pack(fill="x", ipady=5)
         self.combo_format.bind("<<ComboboxSelected>>", self.format_degisti)
 
-        # File Path (Sağ Taraf - Genişleyen)
+        # File Path
         path_frame = tk.Frame(out_opts_row, bg=self.colors['bg_white'])
         path_frame.pack(side="left", fill="x", expand=True)
 
@@ -371,7 +329,6 @@ class WhisperApp:
         settings_frame = ttk.LabelFrame(parent, text="⚙️ Ayarlar", padding=15, style="Card.TFrame")
         settings_frame.pack(fill="x", pady=(0, 10))
         
-        # Model and language selection
         selection_frame = tk.Frame(settings_frame, bg=self.colors['bg_white'])
         selection_frame.pack(fill="x", pady=(0, 10))
         
@@ -384,8 +341,9 @@ class WhisperApp:
         self.combo_model = ttk.Combobox(model_frame, 
             textvariable=self.secilen_model_gorunum,
             state="readonly", font=("Segoe UI", 9))
-        self.combo_model.bind("<<ComboboxSelected>>", lambda e: self.guncelle_cikti_yolu())
         self.combo_model.pack(fill="x", ipady=5)
+        
+        self.combo_model.bind("<<ComboboxSelected>>", lambda e: self.guncelle_cikti_yolu())
         
         # Language selection
         lang_frame = tk.Frame(selection_frame, bg=self.colors['bg_white'])
@@ -455,7 +413,6 @@ class WhisperApp:
             padding=15, style="Card.TFrame")
         progress_frame.pack(fill="x", pady=(0, 10))
         
-        # Status label
         self.lbl_durum = tk.Label(progress_frame,
             textvariable=self.islem_durumu,
             font=("Segoe UI", 10, "bold"),
@@ -463,7 +420,6 @@ class WhisperApp:
             fg=self.colors['primary'])
         self.lbl_durum.pack(anchor="w", pady=(0, 8))
         
-        # Progress bar
         self.progress = ttk.Progressbar(progress_frame,
             orient="horizontal",
             mode="determinate",
@@ -476,7 +432,6 @@ class WhisperApp:
             padding=15, style="Card.TFrame")
         log_frame.pack(fill="both", expand=True)
         
-        # Log text widget with scrollbar
         log_container = tk.Frame(log_frame, bg=self.colors['bg_white'])
         log_container.pack(fill="both", expand=True)
         
@@ -553,6 +508,7 @@ class WhisperApp:
         klasor, isim = os.path.split(input_dosya)
         isim_kok = os.path.splitext(isim)[0]
         
+        # Seçili modelin kısa kodunu bul (örn: faster_large)
         secilen_gorunum = self.secilen_model_gorunum.get()
         model_kodu = "whisper" # Varsayılan
         
@@ -564,8 +520,9 @@ class WhisperApp:
         ext = ".txt"
         if "PDF" in format_str: ext = ".pdf"
         elif "DOCX" in format_str: ext = ".docx"
+        elif "XML" in format_str: ext = ".xml"
         
-        # YENİ FORMAT: DosyaAdi_ModelAdi_transkript.uzanti
+        # DosyaAdi_ModelAdi_transkript.uzanti
         yeni_isim = f"{isim_kok}_{model_kodu}_transkript{ext}"
         self.cikti_konumu.set(os.path.join(klasor, yeni_isim))
 
@@ -582,6 +539,9 @@ class WhisperApp:
         elif "DOCX" in format_str:
             ext = ".docx"
             ftypes = [("Word Dosyası", "*.docx")]
+        elif "XML" in format_str:
+            ext = ".xml"
+            ftypes = [("XML Altyazı", "*.xml")]
 
         dosya = filedialog.asksaveasfilename(
             title="Çıktı Dosyasını Kaydet",
@@ -616,6 +576,56 @@ class WhisperApp:
         
         t = threading.Thread(target=self.worker_thread, daemon=True)
         t.start()
+
+    def xml_olustur(self, input_text):
+        xml_output = [
+            '<?xml version="1.0" encoding="UTF-8"?>',
+            '<tt xmlns="http://www.w3.org/ns/ttml" xml:lang="tr">',
+            '  <body>',
+            '    <div>'
+        ]
+
+        lines = input_text.strip().split('\n')
+        parsed_lines = []
+
+        # Regex: [dakika:saniye] Metin
+        pattern = re.compile(r'\[(\d{2}):(\d{2})\]\s*(.*)')
+
+        for line in lines:
+            match = pattern.match(line.strip())
+            if match:
+                minutes = int(match.group(1))
+                seconds = int(match.group(2))
+                text = match.group(3)
+                total_seconds = (minutes * 60) + seconds
+                parsed_lines.append({'time': total_seconds, 'text': text})
+
+        for i in range(len(parsed_lines)):
+            current_line = parsed_lines[i]
+            start_sec = current_line['time']
+            
+            if i < len(parsed_lines) - 1:
+                end_sec = parsed_lines[i+1]['time']
+            else:
+                end_sec = start_sec + 3.0 
+
+            def format_time(seconds):
+                h = int(seconds // 3600)
+                m = int((seconds % 3600) // 60)
+                s = int(seconds % 60)
+                ms = int((seconds - int(seconds)) * 1000)
+                return f"{h:02}:{m:02}:{s:02}.{ms:03}"
+
+            safe_text = current_line['text'].replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+            p_tag = f'      <p begin="{format_time(start_sec)}" end="{format_time(end_sec)}">{safe_text}</p>'
+            xml_output.append(p_tag)
+
+        xml_output.append('    </div>')
+        xml_output.append('  </body>')
+        xml_output.append('</tt>')
+
+        return "\n".join(xml_output)
 
     def dosya_donustur(self, txt_yolu, hedef_yolu, format_tipi):
         """Convert txt to requested format safely with robust auto-install check"""
@@ -653,6 +663,8 @@ class WhisperApp:
             elif "PDF" in format_tipi:
                 if not kutuphane_yukle_ve_al("fpdf", "fpdf"):
                     raise Exception("Gerekli kütüphane (fpdf) kurulamadığı için işlem iptal edildi.")
+            
+            # XML için ekstra kütüphane gerekmez, string manipülasyonu.
 
             # 2. DOSYA OKUMA
             with open(txt_yolu, 'r', encoding='utf-8') as f:
@@ -665,7 +677,6 @@ class WhisperApp:
                 doc = Document()
                 doc.add_heading('Transkript', 0)
                 
-                # Paragrafları temizleyerek ekle
                 for satir in icerik.split('\n'):
                     temiz_satir = satir.strip()
                     if temiz_satir:
@@ -679,7 +690,6 @@ class WhisperApp:
                 class PDF(FPDF):
                     def header(self):
                         try:
-                            # Windows Arial fontunu kullan (Türkçe için)
                             self.add_font('Arial', '', r'C:\Windows\Fonts\arial.ttf', uni=True)
                             self.set_font('Arial', '', 10)
                         except:
@@ -688,8 +698,6 @@ class WhisperApp:
 
                 pdf = PDF()
                 pdf.add_page()
-                
-                # Font ayarı
                 try:
                     pdf.add_font('Arial', '', r'C:\Windows\Fonts\arial.ttf', uni=True)
                     pdf.set_font("Arial", size=11)
@@ -697,9 +705,14 @@ class WhisperApp:
                     self.log_yaz("! Uyarı: Arial fontu bulunamadı, standart font kullanılıyor.")
                     pdf.set_font("Arial", size=11)
                 
-                # Multi_cell ile satır kaydırma
                 pdf.multi_cell(0, 8, icerik)
                 pdf.output(hedef_yolu)
+
+            elif "XML" in format_tipi:
+                self.log_yaz(">>> XML (Subtitle) oluşturuluyor...")
+                xml_icerik = self.xml_olustur(icerik)
+                with open(hedef_yolu, "w", encoding="utf-8") as f_xml:
+                    f_xml.write(xml_icerik)
                 
             self.log_yaz(f"✓ Dönüştürme Başarılı: {os.path.basename(hedef_yolu)}")
             return True
@@ -718,25 +731,20 @@ class WhisperApp:
             # Setup mode
             if self.kurulum_modu.get():
                 self.log_yaz(">>> KURULUM BAŞLADI...")
-                # fpdf ve python-docx eklendi
                 libs = ["openai-whisper", "faster-whisper", "huggingface_hub", "fpdf", "python-docx"]
                 
-                # 1. Standart Kütüphaneler
                 for lib in libs:
                     self.log_yaz(f"   -> Kontrol: {lib}")
                     try:
                         result = subprocess.run(
                             [sys.executable, "-m", "pip", "install", lib], 
-                            capture_output=True, 
-                            text=True, 
-                            check=True
+                            capture_output=True, text=True, check=True
                         )
                     except subprocess.CalledProcessError as e:
                         self.log_yaz(f"!!! HATA: {lib} kurulamadı!")
                         self.log_yaz(f"Hata Detayı: {e.stderr}")
                         raise Exception(f"{lib} kurulumu başarısız oldu.")
 
-                # 2. PyTorch (CUDA)
                 self.log_yaz("   -> Kontrol: PyTorch (CUDA)")
                 try:
                     subprocess.run([
@@ -746,7 +754,6 @@ class WhisperApp:
                     ], capture_output=True, text=True, check=True)
                 except subprocess.CalledProcessError as e:
                     self.log_yaz("!!! HATA: PyTorch kurulamadı!")
-                    self.log_yaz(f"Hata Detayı: {e.stderr}")
                     raise Exception("PyTorch kurulumu başarısız oldu.")
 
                 self.log_yaz(">>> Kurulum bitti.\n")
@@ -784,19 +791,22 @@ class WhisperApp:
                     except Exception as e:
                         self.log_yaz(f"İndirme hatası: {e}")
 
-            # Transcription
+            # Transcription Variables
             hedef_dil_kodu = LANGUAGE_OPTIONS[self.secilen_dil_adi.get()]
             dosya = self.secilen_dosya.get()
             nihai_cikti = self.cikti_konumu.get()
             secilen_format = self.secilen_format.get()
             
-            # GÜVENLİK İÇİN ÖNCE TXT OLARAK KAYDET (Geçici Dosya)
             temp_txt_path = os.path.splitext(nihai_cikti)[0] + "_temp.txt"
             
             vad_aktif = self.anti_loop_modu.get()
             zaman_damgasi_aktif = self.zaman_damgasi_var.get()
-
             tek_blok_aktif = self.tek_blok_modu.get()
+
+            if "XML" in secilen_format:
+                if not zaman_damgasi_aktif:
+                    zaman_damgasi_aktif = True
+                    self.log_yaz("! XML formatı seçildiği için zaman damgaları otomatik aktifleştirildi.")
 
             self.log_yaz(f"\n{'='*50}")
             self.log_yaz(f"Dosya: {os.path.basename(dosya)}")
@@ -806,7 +816,7 @@ class WhisperApp:
             
             baslangic = time.time()
 
-            # --- WHISPER İŞLEMLERİ (Önce TXT'ye yazar) ---
+            # --- WHISPER İŞLEMLERİ ---
             if "faster" in model_key:
                 from faster_whisper import WhisperModel
                 self.islem_durumu.set("Model Yükleniyor...")
@@ -839,18 +849,17 @@ class WhisperApp:
                             self.progress_guncelle(yuzde)
                         
                         text = segment.text.strip()
+                        
                         if zaman_damgasi_aktif:
                             zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
                             satir = f"{zaman} {text}\n"
-                            
                         elif tek_blok_aktif:
                             satir = f"{text} "
-                            
                         else:
                             satir = f"{text}\n"
                         
                         f.write(satir)
-                        self.root.after(0, self.log_yaz, satir)
+                        self.root.after(0, self.log_yaz, satir.strip())
 
             else: # Standard Whisper
                 import whisper
@@ -878,13 +887,13 @@ class WhisperApp:
                                     satir = f"{zaman} {text}\n"
                                     f.write(satir)
                                     self.root.after(0, self.log_yaz, satir.strip())
-                                    
+                            
                             elif tek_blok_aktif:
                                 full_text = ""
                                 for segment in result["segments"]:
                                     full_text += segment["text"].strip() + " "
                                 f.write(full_text)
-                                self.root.after(0, self.log_yaz, full_text[:100] + "...") # Logu boğmamak için kısa gösterim
+                                self.root.after(0, self.log_yaz, full_text[:100] + "...")
                                 
                             else:
                                 for segment in result["segments"]:
@@ -911,7 +920,7 @@ class WhisperApp:
                     else:
                         islem_basarili = False
                         self.log_yaz("! Dönüştürme başarısız olduğu için TXT dosyası korundu.")
-                        nihai_cikti = temp_txt_path 
+                        nihai_cikti = temp_txt_path
 
                 self.progress.stop()
                 self.progress['value'] = 100
