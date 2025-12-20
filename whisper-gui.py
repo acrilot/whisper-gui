@@ -13,7 +13,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ============================================================================
-# SETTINGS AND FILE PATHS
+# AYARLAR VE DOSYA YOLLARI
 # ============================================================================
 BASE_DIR = os.getcwd()
 GITHUB_FFMPEG_URL = "https://raw.githubusercontent.com/acrilot/whisper-gui/refs/heads/main/install_ffmpeg.bat"
@@ -74,18 +74,20 @@ class WhisperApp:
         
         self.root.title("Whisper Transkript Çıkarıcı")
         self.root.geometry("1100x900")
+        self.root.state('zoomed')
         self.root.minsize(900, 700)
         self.root.configure(bg="#f0f0f0")
         
         # Variables
         self.secilen_dosya = tk.StringVar()
         self.cikti_konumu = tk.StringVar()
-        self.secilen_format = tk.StringVar(value=FORMAT_OPTIONS[0]) # Varsayılan PDF
+        self.secilen_format = tk.StringVar(value=FORMAT_OPTIONS[0]) # Varsayılan TXT
         self.secilen_model_gorunum = tk.StringVar()
         self.secilen_dil_adi = tk.StringVar(value="Otomatik Algıla")
         self.kurulum_modu = tk.BooleanVar(value=False)
+        self.tek_blok_modu = tk.BooleanVar(value=True)
         self.anti_loop_modu = tk.BooleanVar(value=True) 
-        self.zaman_damgasi_var = tk.BooleanVar(value=True)
+        self.zaman_damgasi_var = tk.BooleanVar(value=False)
         self.islem_durumu = tk.StringVar(value="Hazır")
         self.iptal_istendi = False
         self.model_display_map = {} 
@@ -190,7 +192,17 @@ class WhisperApp:
         except Exception as e:
             messagebox.showerror("Kurulum Hatası", f"Otomatik kurulum başarısız oldu:\n{e}")
 
-    def arayuz_olustur(self):
+    def on_blok_change(self):
+        """Tek blok seçildiğinde zaman damgasını kapat"""
+        if self.tek_blok_modu.get():
+            self.zaman_damgasi_var.set(False)
+
+    def on_time_change(self):
+        """Zaman damgası seçildiğinde tek blok modunu kapat"""
+        if self.zaman_damgasi_var.get():
+            self.tek_blok_modu.set(False)
+
+    '''def arayuz_olustur(self):
         """Create the modern GUI interface"""
         # Main container with padding
         main_container = tk.Frame(self.root, bg="#f0f0f0")
@@ -232,7 +244,59 @@ class WhisperApp:
             font=("Segoe UI", 10),
             bg=self.colors['primary'],
             fg="white")
-        subtitle_label.pack(side="left", padx=(0, 20))
+        subtitle_label.pack(side="left", padx=(0, 20))'''
+    
+    def arayuz_olustur(self):
+        """Modern Split Layout Interface - Hepsi Yukarı Hizalı"""
+        # 1. ÜST BAŞLIK
+        self.create_header(self.root)
+        
+        # 2. ANA GÖVDE
+        main_body = tk.Frame(self.root, bg="#f0f0f0")
+        main_body.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+
+        # --- SOL PANEL ---
+        left_panel = tk.Frame(main_body, bg="#f0f0f0", width=700)
+        left_panel.pack(side="left", fill="y", padx=(0, 15))
+        left_panel.pack_propagate(False)
+
+        # --- SAĞ PANEL ---
+        right_panel = tk.Frame(main_body, bg="#f0f0f0")
+        right_panel.pack(side="left", fill="both", expand=True)
+
+        # SOL İÇERİK KONTEYNERİ
+        left_content = tk.Frame(left_panel, bg="#f0f0f0")
+        left_content.pack(side="top", fill="x")
+        
+        self.create_file_section(left_content)
+        self.create_settings_section(left_content)
+        self.create_progress_section(left_content)
+        self.create_control_section(left_content)
+
+        self.create_log_section(right_panel)
+
+    def create_header(self, parent):
+        """Create header section"""
+        header_frame = tk.Frame(parent, bg=self.colors['primary'], height=80) 
+        header_frame.pack(side="top", fill="x", pady=(0, 20)) 
+        header_frame.pack_propagate(False)
+        
+        title_container = tk.Frame(header_frame, bg=self.colors['primary'])
+        title_container.pack(expand=True, fill="both", padx=20)
+
+        title_label = tk.Label(title_container, 
+            text="🎙️ Whisper Transkript Çevirici",
+            font=("Segoe UI", 20, "bold"),
+            bg=self.colors['primary'],
+            fg="white")
+        title_label.pack(side="left", pady=20)
+        
+        subtitle_label = tk.Label(title_container,
+            text="Ses ve video dosyalarınızı metne dönüştürün",
+            font=("Segoe UI", 11),
+            bg=self.colors['primary'],
+            fg="#E3F2FD") # Biraz daha açık bir beyaz tonu
+        subtitle_label.pack(side="right", pady=25)
 
     def create_file_section(self, parent):
         """Create file selection section"""
@@ -320,6 +384,7 @@ class WhisperApp:
         self.combo_model = ttk.Combobox(model_frame, 
             textvariable=self.secilen_model_gorunum,
             state="readonly", font=("Segoe UI", 9))
+        self.combo_model.bind("<<ComboboxSelected>>", lambda e: self.guncelle_cikti_yolu())
         self.combo_model.pack(fill="x", ipady=5)
         
         # Language selection
@@ -348,10 +413,17 @@ class WhisperApp:
             text="🔄 Anti-Loop (VAD)",
             variable=self.anti_loop_modu)
         chk_vad.pack(side="left", padx=(0, 20))
+
+        chk_blok = ttk.Checkbutton(checks_container,
+            text="📄 Tek Blok Metin",
+            variable=self.tek_blok_modu,
+            command=self.on_blok_change)
+        chk_blok.pack(side="left", padx=(0, 20))
         
         chk_time = ttk.Checkbutton(checks_container,
             text="🕐 Zaman Damgası",
-            variable=self.zaman_damgasi_var)
+            variable=self.zaman_damgasi_var,
+            command=self.on_time_change)
         chk_time.pack(side="left", padx=(0, 20))
         
         chk_setup = ttk.Checkbutton(checks_container,
@@ -470,17 +542,32 @@ class WhisperApp:
         if dosya:
             self.guncelle_cikti_yolu(dosya)
 
-    def guncelle_cikti_yolu(self, input_dosya):
-        """Update output path based on format"""
+    def guncelle_cikti_yolu(self, input_dosya=None):
+        """Update output path based on format AND model"""
+        if input_dosya is None:
+            input_dosya = self.secilen_dosya.get()
+            
+        if not input_dosya:
+            return
+
         klasor, isim = os.path.split(input_dosya)
         isim_kok = os.path.splitext(isim)[0]
         
+        secilen_gorunum = self.secilen_model_gorunum.get()
+        model_kodu = "whisper" # Varsayılan
+        
+        if secilen_gorunum and self.model_display_map:
+            ham_kod = self.model_display_map.get(secilen_gorunum, "")
+            model_kodu = ham_kod.replace("_", "-")
+
         format_str = self.secilen_format.get()
         ext = ".txt"
         if "PDF" in format_str: ext = ".pdf"
         elif "DOCX" in format_str: ext = ".docx"
         
-        self.cikti_konumu.set(os.path.join(klasor, f"{isim_kok}_transkript{ext}"))
+        # YENİ FORMAT: DosyaAdi_ModelAdi_transkript.uzanti
+        yeni_isim = f"{isim_kok}_{model_kodu}_transkript{ext}"
+        self.cikti_konumu.set(os.path.join(klasor, yeni_isim))
 
     def kayit_yeri_sec(self):
         """Select output file"""
@@ -709,6 +796,8 @@ class WhisperApp:
             vad_aktif = self.anti_loop_modu.get()
             zaman_damgasi_aktif = self.zaman_damgasi_var.get()
 
+            tek_blok_aktif = self.tek_blok_modu.get()
+
             self.log_yaz(f"\n{'='*50}")
             self.log_yaz(f"Dosya: {os.path.basename(dosya)}")
             self.log_yaz(f"Model: {model_key}")
@@ -752,10 +841,15 @@ class WhisperApp:
                         text = segment.text.strip()
                         if zaman_damgasi_aktif:
                             zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
-                            satir = f"{zaman} {text}"
+                            satir = f"{zaman} {text}\n"
+                            
+                        elif tek_blok_aktif:
+                            satir = f"{text} "
+                            
                         else:
-                            satir = text
-                        f.write(satir + "\n")
+                            satir = f"{text}\n"
+                        
+                        f.write(satir)
                         self.root.after(0, self.log_yaz, satir)
 
             else: # Standard Whisper
@@ -781,12 +875,22 @@ class WhisperApp:
                                     start = segment["start"]
                                     text = segment["text"].strip()
                                     zaman = f"[{int(start//60):02}:{int(start%60):02}]"
-                                    satir = f"{zaman} {text}"
-                                    f.write(satir + "\n")
-                                    self.root.after(0, self.log_yaz, satir)
+                                    satir = f"{zaman} {text}\n"
+                                    f.write(satir)
+                                    self.root.after(0, self.log_yaz, satir.strip())
+                                    
+                            elif tek_blok_aktif:
+                                full_text = ""
+                                for segment in result["segments"]:
+                                    full_text += segment["text"].strip() + " "
+                                f.write(full_text)
+                                self.root.after(0, self.log_yaz, full_text[:100] + "...") # Logu boğmamak için kısa gösterim
+                                
                             else:
-                                f.write(result["text"])
-                                self.root.after(0, self.log_yaz, result["text"])
+                                for segment in result["segments"]:
+                                    satir = segment["text"].strip() + "\n"
+                                    f.write(satir)
+                                    self.root.after(0, self.log_yaz, satir.strip())
                 finally:
                     sys.stderr = original_stderr
 
@@ -798,19 +902,16 @@ class WhisperApp:
                 self.islem_durumu.set("⚠ Durduruldu")
                 messagebox.showinfo("Bilgi", f"Kısmi kayıt (TXT):\n{temp_txt_path}")
             else:
-                # Seçilen formata dönüştür
                 if "TXT" in secilen_format:
-                    # Zaten TXT, sadece ismini düzelt
                     if os.path.exists(nihai_cikti): os.remove(nihai_cikti)
                     os.rename(temp_txt_path, nihai_cikti)
                 else:
-                    # PDF veya DOCX'e çevir
                     if self.dosya_donustur(temp_txt_path, nihai_cikti, secilen_format):
-                        os.remove(temp_txt_path) # Temp txt'yi sil
+                        os.remove(temp_txt_path) 
                     else:
                         islem_basarili = False
                         self.log_yaz("! Dönüştürme başarısız olduğu için TXT dosyası korundu.")
-                        nihai_cikti = temp_txt_path # Hata olursa TXT yolunu göster
+                        nihai_cikti = temp_txt_path 
 
                 self.progress.stop()
                 self.progress['value'] = 100
