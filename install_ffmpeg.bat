@@ -1,6 +1,8 @@
 @echo off
-setlocal
-title FFmpeg Otomatik Kurulumu (Guvenli Surum)
+setlocal EnableDelayedExpansion
+title FFmpeg Otomatik Kurulumu (Native Surum)
+
+Wmic.exe /Namespace:\\root\default Path SystemRestore Call CreateRestorePoint "FFmpeg Kurulum Oncesi", 100, 7 >nul 2>&1
 
 :: 1. YONETICI IZNI KONTROLU
 net session >nul 2>&1
@@ -9,106 +11,74 @@ if %errorLevel% neq 0 (
     pause
     exit /b
 )
-echo [BILGI] Yonetici haklari algilandi. Kurulum basliyor...
 
-:: 2. KURULUM DIZINI AYARLARI
+:: 2. DEGISKENLER
 set "INSTALL_DIR=C:\ffmpeg"
 set "ZIP_URL=https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
 set "TEMP_ZIP=%TEMP%\ffmpeg_setup.zip"
 set "TEMP_DIR=%TEMP%\ffmpeg_temp"
 
 echo.
-echo ---------------------------------------------------
-echo FFmpeg indiriliyor...
-echo ---------------------------------------------------
-
-:: 3. POWERSHELL ILE GUVENLI TLS 1.2 DESTEKLI INDIRME
-powershell -Command ^
- "[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12;" ^
- "; Invoke-WebRequest -Uri '%ZIP_URL%' -OutFile '%TEMP_ZIP%' -UseBasicParsing" 
+echo [1/5] FFmpeg indiriliyor (curl ile)...
+:: --ssl-no-revoke sertifika kontrol hatalarini onler, -L yönlendirmeleri takip eder
+curl -L -o "%TEMP_ZIP%" "%ZIP_URL%" --ssl-no-revoke
 
 if not exist "%TEMP_ZIP%" (
-    echo [HATA] Indirme basarisiz oldu. Internet baglantisini kontrol edin.
+    echo [HATA] Indirme basarisiz.
     pause
     exit /b
 )
 
 echo.
-echo ---------------------------------------------------
-echo Arsiv aciliyor...
-echo ---------------------------------------------------
-
-:: TEMP dizinlerini temizle
+echo [2/5] Arsiv aciliyor (tar ile)...
 if exist "%TEMP_DIR%" rd /s /q "%TEMP_DIR%"
-powershell -Command "Expand-Archive -Path '%TEMP_ZIP%' -DestinationPath '%TEMP_DIR%' -Force"
+mkdir "%TEMP_DIR%"
+:: Windows tar komutu zip dosyalarini destekler
+tar -xf "%TEMP_ZIP%" -C "%TEMP_DIR%"
 
-if not exist "%TEMP_DIR%" (
-    echo [HATA] Arsiv acilirken bir hata olustu.
-    pause
-    exit /b
-)
-
-:: 4. BIN klasorunu otomatik tespit et
-echo [BILGI] Bin klasoru araniyor...
-
-for /f "delims=" %%F in ('powershell -NoLogo -NoProfile -Command ^
-    "(Get-ChildItem -Path '%TEMP_DIR%' -Recurse -Directory | Where-Object { Test-Path ($_.FullName + '\bin') } | Select-Object -First 1).FullName"') do (
-    set "FFROOT=%%F"
-)
-
-if "%FFROOT%"=="" (
-    echo [HATA] BIN klasoru bulunamadi. Zip yapisi degismis olabilir.
-    pause
-    exit /b
-)
-
-echo [BILGI] Bulunan FFmpeg klasoru:
-echo %FFROOT%
+:: 3. BIN KLASORU TESPITI
 echo.
-
-:: 5. ESKI KURULUMU TEMIZLE VE YENI KLASOR OLUSTUR
-if exist "%INSTALL_DIR%" (
-    echo [BILGI] Diger kurulum temizleniyor...
-    rd /s /q "%INSTALL_DIR%"
+echo [3/5] Bin klasoru tespit ediliyor...
+set "FFROOT="
+for /d /r "%TEMP_DIR%" %%d in (bin) do (
+    if exist "%%d\ffmpeg.exe" (
+        set "FFROOT=%%~dpd"
+    )
 )
+
+if "!FFROOT!"=="" (
+    echo [HATA] FFmpeg klasor yapisi bulunamadi.
+    pause
+    exit /b
+)
+:: Sonundaki ters slash'i temizle
+if "!FFROOT:~-1!"=="\" set "FFROOT=!FFROOT:~0,-1!"
+
+:: 4. KURULUM
+echo.
+echo [4/5] Dosyalar %INSTALL_DIR% konumuna tasiniyor...
+
+if exist "%INSTALL_DIR%" rd /s /q "%INSTALL_DIR%"
+mkdir "%INSTALL_DIR%"
 mkdir "%INSTALL_DIR%\bin"
 
+:: Sadece gerekli dosyalari al
+robocopy "!FFROOT!\bin" "%INSTALL_DIR%\bin" /E /NFL /NDL >nul
+if exist "!FFROOT!\LICENSE" copy "!FFROOT!\LICENSE" "%INSTALL_DIR%" >nul
+if exist "!FFROOT!\README.txt" copy "!FFROOT!\README.txt" "%INSTALL_DIR%" >nul
+
+:: 5. PATH AYARI (Powershell Kullanimi Zorunlu - Ancak optimize edildi)
 echo.
-echo ---------------------------------------------------
-echo Dosyalar kopyalaniyor...
-echo ---------------------------------------------------
+echo [5/5] PATH guncelleniyor...
 
-:: Robocopy ile guvenli kopyalama
-robocopy "%FFROOT%\bin" "%INSTALL_DIR%\bin" /E >nul
-if %errorLevel% GEQ 8 (
-    echo [HATA] Dosyalar kopyalanirken hata olustu.
-    exit /b
-)
+:: PATH islemini ayri bir scope'ta yapip batch icine gomulu komut karmasasini azalttik
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+ "$p=[Environment]::GetEnvironmentVariable('Path','Machine'); if($p -notlike '*C:\ffmpeg\bin*'){$n=$p+';C:\ffmpeg\bin';[Environment]::SetEnvironmentVariable('Path',$n,'Machine');Write-Host 'PATH eklendi.'}else{Write-Host 'Zaten ekli.'}"
 
-:: LICENSE + README (varsa)
-if exist "%FFROOT%\LICENSE" copy "%FFROOT%\LICENSE" "%INSTALL_DIR%" >nul
-if exist "%FFROOT%\README.txt" copy "%FFROOT%\README.txt" "%INSTALL_DIR%" >nul
-
-echo [BASARILI] FFmpeg dosyalari yerlestirildi.
-
-:: 6. PATH'E EKLEME — SETX YOK, SISTEMI BOZMAZ
-echo.
-echo ---------------------------------------------------
-echo Sistem yoluna (PATH) ekleniyor...
-echo ---------------------------------------------------
-
-powershell -Command ^
-    "$old = [Environment]::GetEnvironmentVariable('Path','Machine'); if ($old.ToLower() -notlike '*c:\ffmpeg\bin*') { [Environment]::SetEnvironmentVariable('Path', $old + ';C:\ffmpeg\bin', 'Machine'); Write-Host '[BASARILI] PATH guncellendi.' } else { Write-Host '[BILGI] Zaten PATH icinde.' }"
-
-:: 7. TEMIZLIK
+:: TEMIZLIK
 del "%TEMP_ZIP%" >nul 2>&1
 if exist "%TEMP_DIR%" rd /s /q "%TEMP_DIR%"
 
 echo.
-echo ===================================================
-echo KURULUM TAMAMLANDI!
-echo Yeni PATH icin tum terminal pencerelerini kapatip
-echo tekrar acmaniz gerekiyor.
-echo ===================================================
+echo KURULUM BASARIYLA TAMAMLANDI!
 timeout /t 5 >nul
-exit /b
