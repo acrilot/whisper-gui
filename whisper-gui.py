@@ -18,7 +18,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 # ============================================================================
-# AYARLAR VE DOSYA YOLLARI
+# SETTINGS AND FILE PATHS
 # ============================================================================
 BASE_DIR = os.getcwd()
 GITHUB_FFMPEG_URL = "https://raw.githubusercontent.com/acrilot/whisper-gui/refs/heads/main/install_ffmpeg.bat"
@@ -82,6 +82,7 @@ class WhisperApp:
         self.root.state('zoomed') 
         self.root.minsize(900, 700)
         self.root.configure(bg="#f0f0f0")
+        self.root.protocol("WM_DELETE_WINDOW", self.uygulamayi_kapat)
         
         # Variables
         self.secilen_dosya = tk.StringVar()
@@ -96,7 +97,10 @@ class WhisperApp:
         self.zaman_damgasi_var = tk.BooleanVar(value=False)
         self.islem_durumu = tk.StringVar(value="Hazır")
         self.iptal_istendi = False
-        self.model_display_map = {} 
+        self.model_display_map = {}
+
+        self.yuklu_model = None
+        self.yuklu_model_key = None
 
         self.setup_styles()
         self.arayuz_olustur()
@@ -562,6 +566,37 @@ class WhisperApp:
             self.iptal_istendi = True
             self.btn_iptal.config(state="disabled")
 
+    def uygulamayi_kapat(self):
+        """Uygulama kapatılırken thread'leri ve VRAM'i güvenle temizle"""
+        if hasattr(self, 'btn_iptal') and str(self.btn_iptal['state']) == 'normal':
+            cevap = messagebox.askyesno(
+                "Çıkış", 
+                "Şu anda devam eden bir transkript işlemi var.\nUygulamadan çıkmak istediğinize emin misiniz?"
+            )
+            if not cevap:
+                return
+            
+            self.iptal_istendi = True
+
+        self.log_yaz(">>> Uygulama kapatılıyor, bellek temizleniyor...")
+        self.root.update()
+
+        if hasattr(self, 'yuklu_model') and self.yuklu_model is not None:
+            del self.yuklu_model
+            self.yuklu_model = None
+            import gc
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+
+        self.root.destroy()
+        
+        os._exit(0)
+
     def islem_baslat(self):
         """Start transcription process"""
         if not self.secilen_dosya.get():
@@ -664,8 +699,6 @@ class WhisperApp:
                 if not kutuphane_yukle_ve_al("fpdf", "fpdf"):
                     raise Exception("Gerekli kütüphane (fpdf) kurulamadığı için işlem iptal edildi.")
             
-            # XML için ekstra kütüphane gerekmez, string manipülasyonu.
-
             # 2. DOSYA OKUMA
             with open(txt_yolu, 'r', encoding='utf-8') as f:
                 icerik = f.read()
@@ -807,6 +840,7 @@ class WhisperApp:
                 if not zaman_damgasi_aktif:
                     zaman_damgasi_aktif = True
                     self.log_yaz("! XML formatı seçildiği için zaman damgaları otomatik aktifleştirildi.")
+            # -------------------------------------------
 
             self.log_yaz(f"\n{'='*50}")
             self.log_yaz(f"Dosya: {os.path.basename(dosya)}")
@@ -816,12 +850,38 @@ class WhisperApp:
             
             baslangic = time.time()
 
+            # --- VRAM KONTROLÜ VE MODEL YÜKLEME YÖNETİMİ ---
+            if self.yuklu_model_key != model_key:
+                if self.yuklu_model is not None:
+                    self.log_yaz(">>> Önceki model VRAM'den temizleniyor...")
+                    del self.yuklu_model
+                    self.yuklu_model = None
+                    import gc
+                    gc.collect()
+                    try:
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                    except ImportError:
+                        pass
+                
+                self.yuklu_model_key = model_key
+                model_yuklenmeli = True
+            else:
+                model_yuklenmeli = False
+                self.log_yaz(">>> Model VRAM'de zaten yüklü, doğrudan kullanılıyor...")
+            # -----------------------------------------------
+
+            # Döngü başlamadan önce temp dosyasını temizle/oluştur
+            open(temp_txt_path, "w", encoding="utf-8").close()
+            
             # --- WHISPER İŞLEMLERİ ---
             if "faster" in model_key:
                 from faster_whisper import WhisperModel
-                self.islem_durumu.set("Model Yükleniyor...")
-                model = WhisperModel(hedef_model_yolu, device="cuda", 
-                    compute_type="int8", local_files_only=True)
+                if model_yuklenmeli:
+                    self.islem_durumu.set("Model Yükleniyor...")
+                    self.yuklu_model = WhisperModel(hedef_model_yolu, device="cuda", 
+                        compute_type="int8", local_files_only=True)
                 
                 self.islem_durumu.set("Çıkarılıyor...")
                 
@@ -837,69 +897,96 @@ class WhisperApp:
                     try: transcribe_args["repetition_penalty"] = 1.1
                     except: pass
 
-                segments, info = model.transcribe(dosya, **transcribe_args)
+                segments, info = self.yuklu_model.transcribe(dosya, **transcribe_args)
                 self.log_yaz(f"Algılanan Dil: {info.language.upper()}\n")
                 
-                with open(temp_txt_path, "w", encoding="utf-8") as f:
-                    for segment in segments:
-                        if self.iptal_istendi:
-                            break
-                        if info.duration > 0:
-                            yuzde = (segment.end / info.duration) * 100
-                            self.progress_guncelle(yuzde)
-                        
-                        text = segment.text.strip()
-                        
-                        if zaman_damgasi_aktif:
-                            zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
-                            satir = f"{zaman} {text}\n"
-                        elif tek_blok_aktif:
-                            satir = f"{text} "
-                        else:
-                            satir = f"{text}\n"
-                        
-                        f.write(satir)
-                        self.root.after(0, self.log_yaz, satir.strip())
+                # --- HİBRİT I/O: RAM Buffer ---
+                toplu_metin = []
+                segment_limiti = 50
+
+                for segment in segments:
+                    if info.duration > 0:
+                        yuzde = (segment.end / info.duration) * 100
+                        self.progress_guncelle(yuzde)
+                    
+                    text = segment.text.strip()
+                    
+                    if zaman_damgasi_aktif:
+                        zaman = f"[{int(segment.start//60):02}:{int(segment.start%60):02}]"
+                        satir = f"{zaman} {text}\n"
+                    elif tek_blok_aktif:
+                        satir = f"{text} "
+                    else:
+                        satir = f"{text}\n"
+                    
+                    toplu_metin.append(satir)
+                    self.root.after(0, self.log_yaz, satir.strip())
+
+                    # Buffer dolduğunda diske ekle ("a" modu) ve RAM'i boşalt
+                    if len(toplu_metin) >= segment_limiti:
+                        with open(temp_txt_path, "a", encoding="utf-8") as f:
+                            f.writelines(toplu_metin)
+                        toplu_metin.clear()
+
+                    # İptal edildiyse döngüden çık
+                    if self.iptal_istendi:
+                        break
+
+                # Döngü bittikten SONRA (iptal veya normal bitiş) RAM'de kalan son parçaları yaz
+                if toplu_metin:
+                    with open(temp_txt_path, "a", encoding="utf-8") as f:
+                        f.writelines(toplu_metin)
+                    toplu_metin.clear()
 
             else: # Standard Whisper
                 import whisper
-                self.islem_durumu.set("Model Yükleniyor...")
-                load_arg = (hedef_model_yolu if os.path.exists(hedef_model_yolu) 
-                    else model_key.replace("std_","").replace("large","large-v3"))
-                model = whisper.load_model(load_arg, device="cuda")
+                if model_yuklenmeli:
+                    self.islem_durumu.set("Model Yükleniyor...")
+                    load_arg = (hedef_model_yolu if os.path.exists(hedef_model_yolu) 
+                        else model_key.replace("std_","").replace("large","large-v3"))
+                    self.yuklu_model = whisper.load_model(load_arg, device="cuda")
                 self.islem_durumu.set("Çıkarılıyor...")
                 
                 yakalayici = TqdmYakalayici(self.progress_guncelle)
                 sys.stderr = yakalayici
                 try:
-                    result = model.transcribe(
+                    result = self.yuklu_model.transcribe(
                         dosya, language=hedef_dil_kodu, verbose=False, 
                         condition_on_previous_text=not vad_aktif, no_speech_threshold=0.6
                     )
                     
                     if not self.iptal_istendi:
-                        with open(temp_txt_path, "w", encoding="utf-8") as f:
-                            if zaman_damgasi_aktif:
-                                for segment in result["segments"]:
-                                    start = segment["start"]
-                                    text = segment["text"].strip()
-                                    zaman = f"[{int(start//60):02}:{int(start%60):02}]"
-                                    satir = f"{zaman} {text}\n"
-                                    f.write(satir)
-                                    self.root.after(0, self.log_yaz, satir.strip())
+                        # --- HİBRİT I/O: RAM Buffer ---
+                        toplu_metin = []
+                        segment_limiti = 50
+                        
+                        for i, segment in enumerate(result["segments"]):
+                            text = segment["text"].strip()
                             
+                            if zaman_damgasi_aktif:
+                                start = segment["start"]
+                                zaman = f"[{int(start//60):02}:{int(start%60):02}]"
+                                satir = f"{zaman} {text}\n"
                             elif tek_blok_aktif:
-                                full_text = ""
-                                for segment in result["segments"]:
-                                    full_text += segment["text"].strip() + " "
-                                f.write(full_text)
-                                self.root.after(0, self.log_yaz, full_text[:100] + "...")
-                                
+                                satir = f"{text} "
                             else:
-                                for segment in result["segments"]:
-                                    satir = segment["text"].strip() + "\n"
-                                    f.write(satir)
-                                    self.root.after(0, self.log_yaz, satir.strip())
+                                satir = f"{text}\n"
+                                
+                            toplu_metin.append(satir)
+                            self.root.after(0, self.log_yaz, text[:100] + "..." if tek_blok_aktif else satir.strip())
+
+                            # Buffer dolduğunda diske ekle ("a" modu) ve RAM'i boşalt
+                            if len(toplu_metin) >= segment_limiti:
+                                with open(temp_txt_path, "a", encoding="utf-8") as f:
+                                    f.writelines(toplu_metin)
+                                toplu_metin.clear()
+                                
+                        # Kalan son parçaları yaz
+                        if toplu_metin:
+                            with open(temp_txt_path, "a", encoding="utf-8") as f:
+                                f.writelines(toplu_metin)
+                            toplu_metin.clear()
+
                 finally:
                     sys.stderr = original_stderr
 
@@ -907,44 +994,106 @@ class WhisperApp:
 
             # --- DÖNÜŞTÜRME VE TEMİZLİK ---
             islem_basarili = True
-            if self.iptal_istendi:
-                self.islem_durumu.set("⚠ Durduruldu")
-                messagebox.showinfo("Bilgi", f"Kısmi kayıt (TXT):\n{temp_txt_path}")
-            else:
-                if "TXT" in secilen_format:
-                    if os.path.exists(nihai_cikti): os.remove(nihai_cikti)
-                    os.rename(temp_txt_path, nihai_cikti)
-                else:
-                    if self.dosya_donustur(temp_txt_path, nihai_cikti, secilen_format):
-                        os.remove(temp_txt_path) 
-                    else:
-                        islem_basarili = False
-                        self.log_yaz("! Dönüştürme başarısız olduğu için TXT dosyası korundu.")
-                        nihai_cikti = temp_txt_path
-
+            
+            # Arayüzü sıfırlayacak yardımcı fonksiyon (Thread-Safe)
+            def arayuz_sifirla(tamamlandi_mi):
                 self.progress.stop()
-                self.progress['value'] = 100
+                if tamamlandi_mi:
+                    self.progress['value'] = 100
                 self.btn_baslat.config(state="normal")
                 self.btn_iptal.config(state="disabled")
+
+            # Dönüştürme işlemini iptal veya başarı fark etmeksizin uygula
+            if "TXT" in secilen_format:
+                if os.path.exists(nihai_cikti): os.remove(nihai_cikti)
+                os.rename(temp_txt_path, nihai_cikti)
+            else:
+                if self.dosya_donustur(temp_txt_path, nihai_cikti, secilen_format):
+                    if os.path.exists(temp_txt_path):
+                        os.remove(temp_txt_path) 
+                else:
+                    islem_basarili = False
+                    self.log_yaz("! Dönüştürme başarısız olduğu için TXT dosyası korundu.")
+                    nihai_cikti = temp_txt_path
+
+            # Sonuç bildirimi (İptal veya Başarılı)
+            if self.iptal_istendi:
+                self.root.after(0, self.islem_durumu.set, "⚠ Durduruldu")
+                self.root.after(0, arayuz_sifirla, False)
                 
-                self.islem_durumu.set("✓ Tamamlandı")
+                self.log_yaz(f"\n{'='*50}")
+                self.log_yaz("İşlem kullanıcı tarafından durduruldu.")
+                self.log_yaz(f"Kısmi Kayıt: {os.path.basename(nihai_cikti)}")
+                self.log_yaz(f"{'='*50}")
+                
+                self.root.after(0, lambda final_path=nihai_cikti: messagebox.showinfo(
+                    "Bilgi", f"İşlem durduruldu.\n\nKısmi kayıt oluşturuldu:\n{os.path.basename(final_path)}"
+                ))
+            else:
+                self.root.after(0, arayuz_sifirla, True)
+                self.root.after(0, self.islem_durumu.set, "✓ Tamamlandı")
+                
                 self.log_yaz(f"\n{'='*50}")
                 self.log_yaz(f"Toplam Süre: {sure:.2f} saniye")
                 self.log_yaz(f"{'='*50}")
 
-                messagebox.showinfo("Başarılı", 
-                    f"İşlem tamamlandı!\n\nDosya: {os.path.basename(nihai_cikti)}\n"
-                    f"Süre: {sure:.2f} saniye")
+                self.root.after(0, lambda final_path=nihai_cikti, s=sure: messagebox.showinfo(
+                    "Başarılı", f"İşlem tamamlandı!\n\nDosya: {os.path.basename(final_path)}\nSüre: {s:.2f} saniye"
+                ))
+
+        except RuntimeError as re:
+            sys.stderr = original_stderr
+            err_msg = str(re).lower()
+            
+            # OOM (Out of Memory) Tespiti
+            if "memory" in err_msg or "cuda out of memory" in err_msg or "allocate" in err_msg:
+                self.root.after(0, self.islem_durumu.set, "❌ Bellek Yetersiz (VRAM)")
+                self.log_yaz(f"\n{'='*50}")
+                self.log_yaz("KRİTİK HATA: Ekran Kartı Belleği (VRAM) Tükendi!")
+                self.log_yaz("Çözüm Önerileri:")
+                self.log_yaz("1. Daha küçük bir model seçin (Örn: Turbo veya Medium).")
+                self.log_yaz("2. Arka planda GPU kullanan diğer programları kapatın.")
+                self.log_yaz(f"{'='*50}\n")
+                
+                # Agresif VRAM Temizliği
+                if hasattr(self, 'yuklu_model') and self.yuklu_model is not None:
+                    del self.yuklu_model
+                    self.yuklu_model = None
+                    self.yuklu_model_key = None  # Key sıfırlanır, böylece sonraki denemede model temiz bir şekilde baştan yüklenir
+                
+                import gc
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                except ImportError:
+                    pass
+                
+                self.root.after(0, lambda err=re: messagebox.showerror(
+                    "Yetersiz Bellek (VRAM)", 
+                    f"Seçilen model için ekran kartı belleği yetersiz kaldı.\nLütfen 'Turbo' modelini seçerek tekrar deneyin.\n\nDetay:\n{str(err)}"
+                ))
+            else:
+                # Bellek hatası dışındaki RuntimeError istisnalarını genel exception bloğuna aktar
+                self.hata_yonetimi(re)
 
         except Exception as e:
             sys.stderr = original_stderr
-            self.islem_durumu.set("❌ Hata!")
-            self.log_yaz(f"\n{'='*50}")
-            self.log_yaz(f"HATA: {str(e)}")
-            self.log_yaz(f"{'='*50}")
-            messagebox.showerror("Hata", f"Bir hata oluştu:\n\n{str(e)}")
-            self.btn_baslat.config(state="normal")
-            self.btn_iptal.config(state="disabled")
+            self.hata_yonetimi(e)
+
+        finally:
+            # Hata olsun veya olmasın UI butonlarını eski haline getir
+            self.root.after(0, lambda: self.btn_baslat.config(state="normal"))
+            self.root.after(0, lambda: self.btn_iptal.config(state="disabled"))
+
+    def hata_yonetimi(self, e):
+        """Genel hata durumlarında log ve arayüz güncellemelerini thread-safe olarak yapar."""
+        self.root.after(0, self.islem_durumu.set, "❌ Hata!")
+        self.log_yaz(f"\n{'='*50}")
+        self.log_yaz(f"HATA: {str(e)}")
+        self.log_yaz(f"{'='*50}")
+        self.root.after(0, lambda err=e: messagebox.showerror("İşlem Hatası", f"Beklenmeyen bir hata oluştu:\n\n{str(err)}"))
 
 if __name__ == "__main__":
     root = tk.Tk()
