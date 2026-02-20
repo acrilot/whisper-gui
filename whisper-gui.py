@@ -19,9 +19,6 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# ============================================================================
-# SETTINGS AND FILE PATHS
-# ============================================================================
 BASE_DIR = os.getcwd()
 GITHUB_FFMPEG_URL = "https://raw.githubusercontent.com/acrilot/whisper-gui/refs/heads/main/install_ffmpeg.bat"
 
@@ -54,7 +51,6 @@ LANGUAGE_OPTIONS = {
 
 FORMAT_OPTIONS = ["TXT", "PDF", "DOCX", "XML (Altyazı)"]
 COMPUTE_OPTIONS = ["int8", "float16", "int8_float16", "float32"]
-
 
 class TqdmYakalayici:
     def __init__(self, callback_func):
@@ -394,12 +390,10 @@ class WhisperApp:
             
         model_key = self.model_display_map.get(secilen_gorunum, "")
         
-        # Standart model seçildiyse iptal butonunu gizle ve compute ayarını devre dışı bırak
         if "std_" in model_key:
             self.combo_compute.config(state="disabled")
             self.btn_iptal.pack_forget()
             self.btn_baslat.pack_configure(padx=0)
-        # Faster model seçildiyse butonları ve ayarları eski haline getir
         else:
             self.combo_compute.config(state="readonly")
             self.btn_baslat.pack_forget()
@@ -433,7 +427,6 @@ class WhisperApp:
         elif yeni_liste:
             self.combo_model.current(0)
             
-        # Arayüzü başlangıçtaki varsayılan seçime göre güncelle
         self.on_model_change()
 
     def dosya_sec(self):
@@ -1000,9 +993,22 @@ class WhisperApp:
 
     def hata_yonetimi(self, e):
         self.root.after(0, self.islem_durumu.set, "❌ Hata!")
-        self.log_yaz(f"\n{'='*50}\nHATA: {str(e)}\n{'='*50}")
-        self.root.after(0, lambda err=e: messagebox.showerror(
-            "İşlem Hatası", f"Beklenmeyen bir hata oluştu:\n\n{str(err)}"))
+        err_msg = str(e).lower()
+        
+        if "no cuda-capable device" in err_msg or "cuda failed" in err_msg or "cublas" in err_msg:
+            kullanici_mesaji = (
+                "Sisteminizde gerekli donanımsal ivmelenmeyi sağlayacak bir NVIDIA ekran kartı (GPU) bulunamadı "
+                "veya ekran kartı sürücüleriniz aktif değil.\n\n"
+                "Uygulamanın çalışabilmesi için CUDA destekli bir NVIDIA ekran kartına sahip olduğunuzdan ve "
+                "grafik sürücülerinizin güncel olduğundan emin olun."
+            )
+            self.log_yaz(f"\n{'='*58}\nDONANIM HATASI: NVIDIA GPU algılanamadı veya sürücü eksik.\n{'='*58}")
+            self.root.after(0, lambda: messagebox.showerror("Ekran Kartı Bulunamadı", kullanici_mesaji))
+        
+        else:
+            self.log_yaz(f"\n{'='*50}\nHATA: {str(e)}\n{'='*50}")
+            self.root.after(0, lambda err=e: messagebox.showerror(
+                "İşlem Hatası", f"Beklenmeyen bir hata oluştu:\n\n{str(err)}"))
 
 
 if __name__ == "__main__":
