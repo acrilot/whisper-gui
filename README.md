@@ -2,7 +2,7 @@
 
 Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını metne dönüştüren kullanıcı dostu bir masaüstü uygulamasıdır. Faster-Whisper ve standart Whisper kütüphanelerini destekler, NVIDIA CUDA hızlandırması ile çevrimdışı çalışır ve çıktıları TXT, PDF, DOCX veya XML formatında kaydeder.
 
-<img width="1920" height="1001" alt="GUI_v8" src="https://github.com/user-attachments/assets/75b35a5b-e417-4d71-b5fe-2a48d429df5f" />
+<img width="1920" height="1001" alt="GUI_v1 3 0" src="https://github.com/user-attachments/assets/47e174e6-21a4-4e25-869a-fb54cf60302c" />
 
 > [!WARNING]
 > ### DIKKAT: YÜKSEK VERİ KULLANIMI VE GPU GEREKSİNİMİ
@@ -28,6 +28,7 @@ Bu proje, OpenAI'nin Whisper modellerini kullanarak ses ve video dosyalarını m
 * **Tek Blok Metin:** Çıktıyı tek bir paragraf olarak verir.
 * **Otomatik Kurulum Modu:** Gerekli Python kütüphanelerini tek tıkla kurar.
 * **FFmpeg Yönetimi:** Sistemde FFmpeg yoksa otomatik olarak algılar ve kurmasını teklif eder.
+* **Otomatik Versiyon Kontrolü:** Uygulamanın yeni bir sürümü yayımlanması durumunda kullanıcıyı bilgilendirir.
 
 ---
 
@@ -126,7 +127,7 @@ VRAM yetersizliği durumunda `int8` veya `int8_float16` tercih edilmesi önerili
 
 ### Beam Size
 
-Beam değerinin artırılması daha fazla olasılığı değerlendirerek transkripsiyon doğruluğunu artırır, ancak işlem süresini de uzatır. Varsayılan değer olan `5`, doğruluk ve hız açısından çoğu iş için idealdir.
+Beam değerinin artırılması daha fazla olasılığı değerlendirerek transkripsiyon doğruluğunu artırır, ancak işlem süresini de uzatır. Varsayılan değer olan `5`, doğruluk ve hız açısından çoğu iş için idealdir. Arkaplan gürültüsü fazla olan ses dosyalarında yüksek beam değerleri sonucu kötüleştireblir.
 
 ---
 
