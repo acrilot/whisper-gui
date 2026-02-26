@@ -52,6 +52,10 @@ LANGUAGE_OPTIONS = {
 FORMAT_OPTIONS = ["TXT", "PDF", "DOCX", "XML (Altyazı)"]
 COMPUTE_OPTIONS = ["int8", "float16", "int8_float16", "float32"]
 
+APP_VERSION = "1.2.1"
+GITHUB_REPO = "acrilot/whisper-gui"
+GITHUB_PROFILE_URL = "https://github.com/acrilot/whisper-gui"
+
 class TqdmYakalayici:
     def __init__(self, callback_func):
         self.callback = callback_func
@@ -85,7 +89,6 @@ class WhisperApp:
         self.root.configure(bg="#f0f0f0")
         self.root.protocol("WM_DELETE_WINDOW", self.uygulamayi_kapat)
 
-        # Variables
         self.secilen_dosyalar = []
         self.secilen_dosya_gosterim = tk.StringVar()
         self.cikti_konumu = tk.StringVar()
@@ -103,6 +106,8 @@ class WhisperApp:
         self.islem_durumu = tk.StringVar(value="Hazır")
 
         self.iptal_istendi = False
+        self._sayac_aktif = False
+        self._sayac_baslangic = 0.0
         self.model_display_map = {}
         self.yuklu_model = None
         self.yuklu_model_key = None
@@ -113,6 +118,8 @@ class WhisperApp:
         self.setup_styles()
         self.arayuz_olustur()
         self.modelleri_tara_ve_guncelle()
+        self.create_footer()
+        threading.Thread(target=self._guncelleme_kontrol, daemon=True).start()
 
     def setup_styles(self):
         style = ttk.Style()
@@ -327,9 +334,18 @@ class WhisperApp:
     def create_progress_section(self, parent):
         progress_frame = ttk.LabelFrame(parent, text="📊 İlerleme", padding=15, style="Card.TFrame")
         progress_frame.pack(fill="x", pady=(0, 10))
-        self.lbl_durum = tk.Label(progress_frame, textvariable=self.islem_durumu,
+
+        durum_satiri = tk.Frame(progress_frame, bg=self.colors['bg_white'])
+        durum_satiri.pack(fill="x", pady=(0, 8))
+
+        self.lbl_durum = tk.Label(durum_satiri, textvariable=self.islem_durumu,
             font=("Segoe UI", 10, "bold"), bg=self.colors['bg_white'], fg=self.colors['primary'])
-        self.lbl_durum.pack(anchor="w", pady=(0, 8))
+        self.lbl_durum.pack(side="left")
+
+        self.lbl_sayac = tk.Label(durum_satiri, text="",
+            font=("Segoe UI", 10), bg=self.colors['bg_white'], fg=self.colors['text_light'])
+        self.lbl_sayac.pack(side="right")
+
         self.progress = ttk.Progressbar(progress_frame, orient="horizontal",
             mode="determinate", length=400)
         self.progress.pack(fill="x")
@@ -363,6 +379,7 @@ class WhisperApp:
             "       > float16: Doğruluğu int8'e göre daha iyidir ancak int8'den daha yavaştır.\n"
             "       > float32: En yüksek doğruluk, en yavaş hız.\n"
             "   - Beam: Daha yüksek değerler doğruluğu artırır ancak hızı düşürür. Varsayılan değeri olan 5 çoğu iş için idealdir.\n"
+            "           Gürültülü ve anlaşılması zor kayıtlarda yüksek değerler girilmesi çıktıyı olumsuz etkileyebilir.\n"
             "   - Anti-Loop (VAD): Sessiz kısımları filtreler, tekrarlayan halüsinasyon hatalarını önler.\n"
             "5. ÇEVİRİ: 'İngilizce'ye Çevir' seçeneği aktifleştirildiğinde, model doğrudan çeviri modunda (Translate) çalışır."
         )
@@ -568,8 +585,26 @@ class WhisperApp:
         self.txt_log.delete(1.0, tk.END)
         self.progress['value'] = 0
         self.iptal_istendi = False
+        self._sayac_baslat()
         t = threading.Thread(target=self.worker_thread, args=(params,), daemon=True)
         t.start()
+
+    def _sayac_baslat(self):
+        self._sayac_baslangic = time.time()
+        self._sayac_aktif = True
+        self._sayac_guncelle()
+
+    def _sayac_durdur(self):
+        self._sayac_aktif = False
+        self.lbl_sayac.config(text="")
+
+    def _sayac_guncelle(self):
+        if not self._sayac_aktif:
+            return
+        gecen = int(time.time() - self._sayac_baslangic)
+        dk, sn = divmod(gecen, 60)
+        self.lbl_sayac.config(text=f"{dk}:{sn:02d}")
+        self.root.after(1000, self._sayac_guncelle)
 
     def _format_timestamp(self, seconds):
         h = int(seconds // 3600)
@@ -716,6 +751,7 @@ class WhisperApp:
 
     def arayuz_sifirla(self, tamamlandi_mi):
         """Thread-safe UI Reset"""
+        self._sayac_durdur()
         self.progress.stop()
         if tamamlandi_mi:
             self.progress['value'] = 100
@@ -1009,6 +1045,130 @@ class WhisperApp:
             self.log_yaz(f"\n{'='*50}\nHATA: {str(e)}\n{'='*50}")
             self.root.after(0, lambda err=e: messagebox.showerror(
                 "İşlem Hatası", f"Beklenmeyen bir hata oluştu:\n\n{str(err)}"))
+
+    # -------------------------------------------------------------------------
+    # Sürüm ve Güncelleme
+    # -------------------------------------------------------------------------
+
+    def create_footer(self):
+        footer = tk.Frame(self.root, bg="#f0f0f0")
+
+        lbl_author = tk.Label(
+            footer, text="acrilot",
+            fg=self.colors['primary'], bg="#f0f0f0",
+            font=("Segoe UI", 8), cursor="hand2"
+        )
+        lbl_author.pack(side="left")
+        lbl_author.bind("<Button-1>", lambda e: self._url_ac(GITHUB_PROFILE_URL))
+
+        lbl_info = tk.Label(
+            footer, text=f" | Whisper GUI V{APP_VERSION}",
+            fg="#9E9E9E", bg="#f0f0f0",
+            font=("Segoe UI", 8)
+        )
+        lbl_info.pack(side="left")
+
+        footer.place(relx=1.0, rely=1.0, x=-12, y=-8, anchor="se")
+
+    def _url_ac(self, url):
+        try:
+            import webbrowser
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+    def _guncelleme_kontrol(self):
+        try:
+            import json
+            api_url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+            req = urllib.request.Request(
+                api_url,
+                headers={"User-Agent": "whisper-gui-updater", "Accept": "application/vnd.github+json"}
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+
+            tag = data.get("tag_name", "").strip().lstrip("v")
+            if not tag:
+                return
+
+            try:
+                mevcut = tuple(int(x) for x in APP_VERSION.split("."))
+                guncel  = tuple(int(x) for x in tag.split("."))
+                uzunluk = max(len(mevcut), len(guncel))
+                mevcut  = mevcut + (0,) * (uzunluk - len(mevcut))
+                guncel  = guncel  + (0,) * (uzunluk - len(guncel))
+            except ValueError:
+                return
+
+            if guncel <= mevcut:
+                return
+
+            assets = data.get("assets", [])
+            pyw_asset = next((a for a in assets if a.get("name", "").endswith(".pyw")), None)
+
+            self.root.after(0, lambda: self._guncelleme_popup(tag, pyw_asset))
+
+        except Exception:
+            pass
+
+    def _guncelleme_popup(self, yeni_versiyon, asset):
+        mesaj = (
+            f"Yeni bir sürüm mevcut: V{yeni_versiyon}\n"
+            f"Mevcut sürüm: V{APP_VERSION}\n\n"
+            "Güncelleme indirilip uygulanacak ve program yeniden başlatılacaktır.\n"
+            "Güncellemek istiyor musunuz?"
+        )
+        if not messagebox.askyesno("Güncelleme Mevcut", mesaj):
+            return
+
+        if asset is None:
+            messagebox.showwarning(
+                "Güncelleme",
+                "Bu sürüm için indirilebilir .pyw dosyası bulunamadı.\n"
+                "Lütfen GitHub sayfasını manuel olarak kontrol edin."
+            )
+            self._url_ac(f"https://github.com/{GITHUB_REPO}/releases/latest")
+            return
+
+        hedef = os.path.abspath(sys.argv[0])
+        yedek  = hedef + ".bak"
+        tmp    = hedef + ".tmp"
+
+        try:
+            urllib.request.urlretrieve(asset["browser_download_url"], tmp)
+
+            if os.path.exists(yedek):
+                os.remove(yedek)
+            os.rename(hedef, yedek)
+            os.rename(tmp, hedef)
+
+            messagebox.showinfo(
+                "Güncelleme Tamamlandı",
+                f"V{yeni_versiyon} başarıyla indirildi.\n"
+                "Eski sürüm '.bak' uzantısıyla yedeklendi.\n"
+                "Uygulama yeniden başlatılıyor..."
+            )
+            subprocess.Popen([sys.executable] + sys.argv)
+            sys.exit(0)
+
+        except Exception as e:
+            # İndirme/yeniden adlandırma başarısız olduysa yedeği geri yükle
+            if os.path.exists(yedek) and not os.path.exists(hedef):
+                try:
+                    os.rename(yedek, hedef)
+                except OSError:
+                    pass
+            if os.path.exists(tmp):
+                try:
+                    os.remove(tmp)
+                except OSError:
+                    pass
+            messagebox.showerror(
+                "Güncelleme Hatası",
+                f"Güncelleme sırasında bir hata oluştu:\n{e}\n\n"
+                "Lütfen GitHub sayfasından manuel olarak indirin."
+            )
 
 
 if __name__ == "__main__":
