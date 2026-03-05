@@ -9,7 +9,6 @@ import ctypes
 import gc
 import json
 import threading
-import webbrowser
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(1)
@@ -25,18 +24,20 @@ try:
         QApplication, QMainWindow, QWidget, QFrame,
         QVBoxLayout, QHBoxLayout, QGridLayout,
         QLabel, QLineEdit, QPushButton, QComboBox, QCheckBox,
-        QSpinBox, QProgressBar, QPlainTextEdit,
-        QFileDialog, QMessageBox, QSizePolicy,
-        QGraphicsOpacityEffect
+        QSpinBox, QProgressBar, QPlainTextEdit, QSizeGrip,
+        QFileDialog, QMessageBox, QGraphicsOpacityEffect
     )
-    from PyQt6.QtCore import Qt, QThread, pyqtSignal, QTimer, QUrl, QEasingCurve, QPropertyAnimation
-    from PyQt6.QtGui import QFont, QDesktopServices, QCursor
+    from PyQt6.QtCore import (
+        Qt, QThread, pyqtSignal, QTimer, QUrl,
+        QEasingCurve, QPropertyAnimation, QPoint
+    )
+    from PyQt6.QtGui import QDesktopServices, QCursor
     PYQT6_OK = True
 except ImportError:
     PYQT6_OK = False
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-APP_VERSION     = "1.3.0"
+APP_VERSION     = "1.3.1"
 GITHUB_REPO     = "acrilot/whisper-gui"
 GITHUB_PAGE_URL = "https://github.com/acrilot/whisper-gui"
 FFMPEG_BAT_URL  = (
@@ -76,7 +77,7 @@ PYTORCH_INSTALL_ARGS = [
     "--index-url", "https://download.pytorch.org/whl/cu124",
 ]
 
-# ── UI strings (TR / EN) ──────────────────────────────────────────────────────
+# ── UI strings (TR / EN / DE) ─────────────────────────────────────────────────
 STRINGS = {
     "en": {
         "window_title":      "Whisper Transcript",
@@ -196,6 +197,422 @@ STRINGS = {
         "install_error":     "{lib} kurulumu başarısız.\nDetay: {detail}",
         "pytorch_error":     "PyTorch (CUDA) kurulumu başarısız.",
     },
+    "de": {
+        "window_title":      "Whisper Transkript",
+        "header_sub":        "  Transkript-Extraktor",
+        "sec_files":         "DATEIEN & FORMAT",
+        "sec_model":         "MODELL & EINSTELLUNGEN",
+        "sec_options":       "OPTIONEN",
+        "sec_progress":      "FORTSCHRITT",
+        "sec_log":           "TRANSKRIPT-PROTOKOLL",
+        "lbl_language":      "Sprache",
+        "lbl_compute":       "Rechenleistung",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "Ausgabe",
+        "ph_files":          "Audio- oder Videodateien auswählen...",
+        "ph_output":         "Ausgabepfad...",
+        "btn_browse":        "Durchsuchen",
+        "btn_start":         "Starten",
+        "btn_stop":          "Stoppen & Speichern",
+        "btn_clear":         "Leeren",
+        "chk_vad":           "Anti-Schleife (VAD)",
+        "chk_single":        "Einzelblock",
+        "chk_timestamps":    "Zeitstempel",
+        "chk_translate":     "Ins Englische übersetzen",
+        "chk_install":       "Installationsmodus",
+        "status_ready":      "Bereit",
+        "status_done":       "Fertig",
+        "status_stopped":    "Gestoppt",
+        "status_error":      "Fehler",
+        "lang_names": [
+            "Automatisch erkennen", "Türkisch", "Englisch", "Deutsch",
+            "Französisch", "Spanisch", "Chinesisch", "Japanisch"
+        ],
+        "ffmpeg_title":      "FFmpeg fehlt",
+        "ffmpeg_msg":        (
+            "FFmpeg wurde auf Ihrem System nicht gefunden. "
+            "Es wird für die Audioverarbeitung benötigt.\n\n"
+            "Automatisch von GitHub herunterladen und installieren?"
+        ),
+        "ffmpeg_warn":       "FFmpeg fehlt. Die Anwendung funktioniert möglicherweise nicht korrekt.",
+        "ffmpeg_restart":    "FFmpeg installiert. Die Anwendung wird neu gestartet.",
+        "stop_title":        "Stoppen",
+        "stop_msg":          "Vorgang abbrechen und bisherigen Fortschritt speichern?",
+        "exit_title":        "Beenden",
+        "exit_msg":          "Eine Transkription ist im Gange. Trotzdem beenden?",
+        "done_title":        "Abgeschlossen",
+        "done_msg":          "Alle Dateien verarbeitet.\nGesamtzeit: {:.2f}s",
+        "update_title":      "Update verfügbar",
+        "update_msg":        (
+            "Eine neue Version ist verfügbar: V{new}\n"
+            "Aktuelle Version: V{cur}\n\n"
+            "Jetzt herunterladen und neu starten?"
+        ),
+        "update_no_asset":   "Keine .pyw-Datei für dieses Release gefunden. Bitte manuell auf GitHub prüfen.",
+        "update_done":       "V{new} heruntergeladen.\nVorherige Version als .bak gesichert.\nNeustart...",
+        "update_fail":       "Update fehlgeschlagen:\n{err}\n\nBitte manuell von GitHub herunterladen.",
+        "batch_output_info": "Im Batch-Modus werden die Ausgaben neben der jeweiligen Quelldatei gespeichert.",
+        "warn_no_file":      "Bitte wählen Sie mindestens eine Datei aus.",
+        "install_error":     "Installation von {lib} fehlgeschlagen.\nDetails: {detail}",
+        "pytorch_error":     "PyTorch (CUDA) Installation fehlgeschlagen."
+    },
+    "es": {
+        "window_title":      "Transcriptor Whisper",
+        "header_sub":        "  Extractor de Transcripciones",
+        "sec_files":         "ARCHIVOS Y FORMATO",
+        "sec_model":         "MODELO Y AJUSTES",
+        "sec_options":       "OPCIONES",
+        "sec_progress":      "PROGRESO",
+        "sec_log":           "REGISTRO DE TRANSCRIPCIÓN",
+        "lbl_language":      "Idioma",
+        "lbl_compute":       "Cómputo",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "Salida",
+        "ph_files":          "Seleccionar archivos de audio o video...",
+        "ph_output":         "Ruta de salida...",
+        "btn_browse":        "Explorar",
+        "btn_start":         "Iniciar",
+        "btn_stop":          "Detener y Guardar",
+        "btn_clear":         "Limpiar",
+        "chk_vad":           "Anti-Bucle (VAD)",
+        "chk_single":        "Bloque Único",
+        "chk_timestamps":    "Marcas de tiempo",
+        "chk_translate":     "Traducir al Inglés",
+        "chk_install":       "Modo de Instalación",
+        "status_ready":      "Listo",
+        "status_done":       "Hecho",
+        "status_stopped":    "Detenido",
+        "status_error":      "Error",
+        "lang_names": [
+            "Autodetectar", "Turco", "Inglés", "Alemán",
+            "Francés", "Español", "Chino", "Japonés"
+        ],
+        "ffmpeg_title":      "Falta FFmpeg",
+        "ffmpeg_msg":        "No se encontró FFmpeg en su sistema. Es necesario para el procesamiento de audio.\n\n¿Descargarlo e instalarlo automáticamente desde GitHub?",
+        "ffmpeg_warn":       "Falta FFmpeg. La aplicación podría no funcionar correctamente.",
+        "ffmpeg_restart":    "FFmpeg instalado. La aplicación se reiniciará.",
+        "stop_title":        "Detener",
+        "stop_msg":          "¿Detener el proceso y guardar el progreso hasta ahora?",
+        "exit_title":        "Salir",
+        "exit_msg":          "Hay una transcripción en curso. ¿Salir de todos modos?",
+        "done_title":        "Completado",
+        "done_msg":          "Todos los archivos procesados.\nTiempo total: {:.2f}s",
+        "update_title":      "Actualización Disponible",
+        "update_msg":        "Hay una nueva versión disponible: V{new}\nVersión actual: V{cur}\n\n¿Descargar y reiniciar ahora?",
+        "update_no_asset":   "No se encontró el archivo .pyw para esta versión. Verifique GitHub manualmente.",
+        "update_done":       "V{new} descargada.\nVersión anterior respaldada como .bak\nReiniciando...",
+        "update_fail":       "Falló la actualización:\n{err}\n\nPor favor, descargue manualmente desde GitHub.",
+        "batch_output_info": "En modo por lotes, las salidas se guardan junto a cada archivo de origen.",
+        "warn_no_file":      "Por favor, seleccione al menos un archivo.",
+        "install_error":     "Falló la instalación de {lib}.\nDetalle: {detail}",
+        "pytorch_error":     "Falló la instalación de PyTorch (CUDA)."
+    },
+    "pt": {
+        "window_title":      "Transcritor Whisper",
+        "header_sub":        "  Extrator de Transcrições",
+        "sec_files":         "ARQUIVOS E FORMATO",
+        "sec_model":         "MODELO E CONFIGURAÇÕES",
+        "sec_options":       "OPÇÕES",
+        "sec_progress":      "PROGRESSO",
+        "sec_log":           "REGISTRO DE TRANSCRIÇÃO",
+        "lbl_language":      "Idioma",
+        "lbl_compute":       "Computação",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "Saída",
+        "ph_files":          "Selecione arquivos de áudio ou vídeo...",
+        "ph_output":         "Caminho de saída...",
+        "btn_browse":        "Procurar",
+        "btn_start":         "Iniciar",
+        "btn_stop":          "Parar e Salvar",
+        "btn_clear":         "Limpar",
+        "chk_vad":           "Anti-Loop (VAD)",
+        "chk_single":        "Bloco Único",
+        "chk_timestamps":    "Carimbos de tempo",
+        "chk_translate":     "Traduzir para Inglês",
+        "chk_install":       "Modo de Instalação",
+        "status_ready":      "Pronto",
+        "status_done":       "Concluído",
+        "status_stopped":    "Parado",
+        "status_error":      "Erro",
+        "lang_names": [
+            "Detecção Automática", "Turco", "Inglês", "Alemão",
+            "Francês", "Espanhol", "Chinês", "Japonês"
+        ],
+        "ffmpeg_title":      "FFmpeg Ausente",
+        "ffmpeg_msg":        "O FFmpeg não foi encontrado no seu sistema. Ele é necessário para o processamento de áudio.\n\nBaixar e instalar automaticamente do GitHub?",
+        "ffmpeg_warn":       "FFmpeg está ausente. O aplicativo pode não funcionar corretamente.",
+        "ffmpeg_restart":    "FFmpeg instalado. O aplicativo será reiniciado.",
+        "stop_title":        "Parar",
+        "stop_msg":          "Parar o processo e salvar o progresso até agora?",
+        "exit_title":        "Sair",
+        "exit_msg":          "Uma transcrição está em andamento. Sair de qualquer maneira?",
+        "done_title":        "Completo",
+        "done_msg":          "Todos os arquivos processados.\nTempo total: {:.2f}s",
+        "update_title":      "Atualização Disponível",
+        "update_msg":        "Uma nova versão está disponível: V{new}\nVersão atual: V{cur}\n\nBaixar e reiniciar agora?",
+        "update_no_asset":   "Nenhum arquivo .pyw encontrado para este lançamento. Verifique o GitHub manualmente.",
+        "update_done":       "V{new} baixada.\nVersão anterior salva como .bak\nReiniciando...",
+        "update_fail":       "A atualização falhou:\n{err}\n\nPor favor, baixe manualmente do GitHub.",
+        "batch_output_info": "No modo em lote, as saídas são salvas ao lado de cada arquivo de origem.",
+        "warn_no_file":      "Por favor, selecione pelo menos um arquivo.",
+        "install_error":     "A instalação de {lib} falhou.\nDetalhe: {detail}",
+        "pytorch_error":     "A instalação do PyTorch (CUDA) falhou."
+    },
+    "ja": {
+        "window_title":      "Whisper 文字起こし",
+        "header_sub":        "  文字起こし抽出ツール",
+        "sec_files":         "ファイルとフォーマット",
+        "sec_model":         "モデルと設定",
+        "sec_options":       "オプション",
+        "sec_progress":      "進捗",
+        "sec_log":           "文字起こしログ",
+        "lbl_language":      "言語",
+        "lbl_compute":       "計算処理",
+        "lbl_beam":          "ビーム",
+        "lbl_output":        "出力",
+        "ph_files":          "音声または動画ファイルを選択...",
+        "ph_output":         "出力先パス...",
+        "btn_browse":        "参照",
+        "btn_start":         "開始",
+        "btn_stop":          "停止して保存",
+        "btn_clear":         "クリア",
+        "chk_vad":           "ループ防止 (VAD)",
+        "chk_single":        "シングルブロック",
+        "chk_timestamps":    "タイムスタンプ",
+        "chk_translate":     "英語に翻訳",
+        "chk_install":       "インストールモード",
+        "status_ready":      "準備完了",
+        "status_done":       "完了",
+        "status_stopped":    "停止",
+        "status_error":      "エラー",
+        "lang_names": [
+            "自動検出", "トルコ語", "英語", "ドイツ語",
+            "フランス語", "スペイン語", "中国語", "日本語"
+        ],
+        "ffmpeg_title":      "FFmpeg が見つかりません",
+        "ffmpeg_msg":        "システムに FFmpeg が見つかりませんでした。音声処理に必要です。\n\nGitHub から自動的にダウンロードしてインストールしますか？",
+        "ffmpeg_warn":       "FFmpeg がありません。アプリケーションが正常に動作しない可能性があります。",
+        "ffmpeg_restart":    "FFmpeg がインストールされました。アプリケーションを再起動します。",
+        "stop_title":        "停止",
+        "stop_msg":          "プロセスを停止し、これまでの進捗を保存しますか？",
+        "exit_title":        "終了",
+        "exit_msg":          "文字起こしが進行中です。それでも終了しますか？",
+        "done_title":        "完了",
+        "done_msg":          "すべてのファイルが処理されました。\n合計時間: {:.2f}秒",
+        "update_title":      "アップデート利用可能",
+        "update_msg":        "新しいバージョンが利用可能です: V{new}\n現在のバージョン: V{cur}\n\n今すぐダウンロードして再起動しますか？",
+        "update_no_asset":   "このリリースの .pyw ファイルが見つかりません。GitHub を手動で確認してください。",
+        "update_done":       "V{new} がダウンロードされました。\n前のバージョンは .bak としてバックアップされました\n再起動しています...",
+        "update_fail":       "アップデートに失敗しました:\n{err}\n\nGitHub から手動でダウンロードしてください。",
+        "batch_output_info": "バッチモードでは、出力は各ソースファイルと同じ場所に保存されます。",
+        "warn_no_file":      "少なくとも1つのファイルを選択してください。",
+        "install_error":     "{lib} のインストールに失敗しました。\n詳細: {detail}",
+        "pytorch_error":     "PyTorch (CUDA) のインストールに失敗しました。"
+    },
+    "zh": {
+        "window_title":      "Whisper 转录器",
+        "header_sub":        "  转录提取工具",
+        "sec_files":         "文件与格式",
+        "sec_model":         "模型与设置",
+        "sec_options":       "选项",
+        "sec_progress":      "进度",
+        "sec_log":           "转录日志",
+        "lbl_language":      "语言",
+        "lbl_compute":       "计算",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "输出",
+        "ph_files":          "选择音频或视频文件...",
+        "ph_output":         "输出路径...",
+        "btn_browse":        "浏览",
+        "btn_start":         "开始",
+        "btn_stop":          "停止并保存",
+        "btn_clear":         "清除",
+        "chk_vad":           "防循环 (VAD)",
+        "chk_single":        "单区块",
+        "chk_timestamps":    "时间戳",
+        "chk_translate":     "翻译为英语",
+        "chk_install":       "安装模式",
+        "status_ready":      "就绪",
+        "status_done":       "完成",
+        "status_stopped":    "已停止",
+        "status_error":      "错误",
+        "lang_names": [
+            "自动检测", "土耳其语", "英语", "德语",
+            "法语", "西班牙语", "中文", "日语"
+        ],
+        "ffmpeg_title":      "缺少 FFmpeg",
+        "ffmpeg_msg":        "您的系统中未找到 FFmpeg。音频处理需要它。\n\n是否从 GitHub 自动下载并安装？",
+        "ffmpeg_warn":       "缺少 FFmpeg。应用程序可能无法正常工作。",
+        "ffmpeg_restart":    "FFmpeg 已安装。应用程序将重启。",
+        "stop_title":        "停止",
+        "stop_msg":          "是否停止进程并保存当前的进度？",
+        "exit_title":        "退出",
+        "exit_msg":          "转录正在进行中。确认要退出吗？",
+        "done_title":        "完成",
+        "done_msg":          "所有文件处理完毕。\n总用时: {:.2f}秒",
+        "update_title":      "可用更新",
+        "update_msg":        "有新版本可用: V{new}\n当前版本: V{cur}\n\n是否立即下载并重启？",
+        "update_no_asset":   "未找到此版本的 .pyw 文件。请手动检查 GitHub。",
+        "update_done":       "V{new} 已下载。\n旧版本已备份为 .bak\n正在重启...",
+        "update_fail":       "更新失败:\n{err}\n\n请从 GitHub 手动下载。",
+        "batch_output_info": "在批量模式下，输出文件将保存在每个源文件的旁边。",
+        "warn_no_file":      "请至少选择一个文件。",
+        "install_error":     "{lib} 安装失败。\n详细信息: {detail}",
+        "pytorch_error":     "PyTorch (CUDA) 安装失败。"
+    },
+    "fr": {
+        "window_title":      "Transcripteur Whisper",
+        "header_sub":        "  Extracteur de Transcription",
+        "sec_files":         "FICHIERS ET FORMAT",
+        "sec_model":         "MODÈLE ET PARAMÈTRES",
+        "sec_options":       "OPTIONS",
+        "sec_progress":      "PROGRESSION",
+        "sec_log":           "JOURNAL DE TRANSCRIPTION",
+        "lbl_language":      "Langue",
+        "lbl_compute":       "Calcul",
+        "lbl_beam":          "Faisceau",
+        "lbl_output":        "Sortie",
+        "ph_files":          "Sélectionnez des fichiers audio ou vidéo...",
+        "ph_output":         "Chemin de sortie...",
+        "btn_browse":        "Parcourir",
+        "btn_start":         "Démarrer",
+        "btn_stop":          "Arrêter et Enregistrer",
+        "btn_clear":         "Effacer",
+        "chk_vad":           "Anti-Boucle (VAD)",
+        "chk_single":        "Bloc Unique",
+        "chk_timestamps":    "Horodatages",
+        "chk_translate":     "Traduire en anglais",
+        "chk_install":       "Mode d'Installation",
+        "status_ready":      "Prêt",
+        "status_done":       "Terminé",
+        "status_stopped":    "Arrêté",
+        "status_error":      "Erreur",
+        "lang_names": [
+            "Détection Auto", "Turc", "Anglais", "Allemand",
+            "Français", "Espagnol", "Chinois", "Japonais"
+        ],
+        "ffmpeg_title":      "FFmpeg Manquant",
+        "ffmpeg_msg":        "FFmpeg est introuvable sur votre système. Il est requis pour le traitement audio.\n\nTélécharger et installer automatiquement depuis GitHub ?",
+        "ffmpeg_warn":       "FFmpeg est manquant. L'application risque de ne pas fonctionner correctement.",
+        "ffmpeg_restart":    "FFmpeg installé. L'application va redémarrer.",
+        "stop_title":        "Arrêter",
+        "stop_msg":          "Arrêter le processus et enregistrer la progression actuelle ?",
+        "exit_title":        "Quitter",
+        "exit_msg":          "Une transcription est en cours. Quitter quand même ?",
+        "done_title":        "Terminé",
+        "done_msg":          "Tous les fichiers ont été traités.\nTemps total : {:.2f}s",
+        "update_title":      "Mise à jour Disponible",
+        "update_msg":        "Une nouvelle version est disponible : V{new}\nVersion actuelle : V{cur}\n\nTélécharger et redémarrer maintenant ?",
+        "update_no_asset":   "Aucun fichier .pyw trouvé pour cette version. Vérifiez manuellement sur GitHub.",
+        "update_done":       "V{new} téléchargée.\nVersion précédente sauvegardée en .bak\nRedémarrage...",
+        "update_fail":       "Échec de la mise à jour :\n{err}\n\nVeuillez télécharger manuellement depuis GitHub.",
+        "batch_output_info": "En mode traitement par lots, les sorties sont enregistrées à côté de chaque fichier source.",
+        "warn_no_file":      "Veuillez sélectionner au moins un fichier.",
+        "install_error":     "L'installation de {lib} a échoué.\nDétail : {detail}",
+        "pytorch_error":     "L'installation de PyTorch (CUDA) a échoué."
+    },
+    "it": {
+        "window_title":      "Trascrittore Whisper",
+        "header_sub":        "  Estrattore di Trascrizioni",
+        "sec_files":         "FILE E FORMATO",
+        "sec_model":         "MODELLO E IMPOSTAZIONI",
+        "sec_options":       "OPZIONI",
+        "sec_progress":      "PROGRESSO",
+        "sec_log":           "LOG DI TRASCRIZIONE",
+        "lbl_language":      "Lingua",
+        "lbl_compute":       "Calcolo",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "Output",
+        "ph_files":          "Seleziona file audio o video...",
+        "ph_output":         "Percorso di output...",
+        "btn_browse":        "Sfoglia",
+        "btn_start":         "Avvia",
+        "btn_stop":          "Ferma e Salva",
+        "btn_clear":         "Pulisci",
+        "chk_vad":           "Anti-Loop (VAD)",
+        "chk_single":        "Blocco Singolo",
+        "chk_timestamps":    "Marche temporali",
+        "chk_translate":     "Traduci in Inglese",
+        "chk_install":       "Modalità Installazione",
+        "status_ready":      "Pronto",
+        "status_done":       "Fatto",
+        "status_stopped":    "Fermato",
+        "status_error":      "Errore",
+        "lang_names": [
+            "Rilevamento Auto", "Turco", "Inglese", "Tedesco",
+            "Francese", "Spagnolo", "Cinese", "Giapponese"
+        ],
+        "ffmpeg_title":      "FFmpeg Mancante",
+        "ffmpeg_msg":        "FFmpeg non è stato trovato sul tuo sistema. È richiesto per l'elaborazione audio.\n\nScaricare e installare automaticamente da GitHub?",
+        "ffmpeg_warn":       "FFmpeg è mancante. L'applicazione potrebbe non funzionare correttamente.",
+        "ffmpeg_restart":    "FFmpeg installato. L'applicazione verrà riavviata.",
+        "stop_title":        "Ferma",
+        "stop_msg":          "Fermare il processo e salvare i progressi finora?",
+        "exit_title":        "Esci",
+        "exit_msg":          "Una trascrizione è in corso. Uscire comunque?",
+        "done_title":        "Completato",
+        "done_msg":          "Tutti i file processati.\nTempo totale: {:.2f}s",
+        "update_title":      "Aggiornamento Disponibile",
+        "update_msg":        "È disponibile una nuova versione: V{new}\nVersione attuale: V{cur}\n\nScaricare e riavviare ora?",
+        "update_no_asset":   "Nessun file .pyw trovato per questa versione. Controlla GitHub manualmente.",
+        "update_done":       "V{new} scaricata.\nVersione precedente salvata come .bak\nRiavvio in corso...",
+        "update_fail":       "Aggiornamento fallito:\n{err}\n\nSi prega di scaricare manualmente da GitHub.",
+        "batch_output_info": "In modalità batch, gli output vengono salvati accanto a ciascun file sorgente.",
+        "warn_no_file":      "Si prega di selezionare almeno un file.",
+        "install_error":     "Installazione di {lib} fallita.\nDettaglio: {detail}",
+        "pytorch_error":     "Installazione di PyTorch (CUDA) fallita."
+    },
+    "ru": {
+        "window_title":      "Транскрибатор Whisper",
+        "header_sub":        "  Экстрактор Транскрипций",
+        "sec_files":         "ФАЙЛЫ И ФОРМАТ",
+        "sec_model":         "МОДЕЛЬ И НАСТРОЙКИ",
+        "sec_options":       "ОПЦИИ",
+        "sec_progress":      "ПРОГРЕСС",
+        "sec_log":           "ЖУРНАЛ ТРАНСКРИПЦИИ",
+        "lbl_language":      "Язык",
+        "lbl_compute":       "Вычисления",
+        "lbl_beam":          "Beam",
+        "lbl_output":        "Вывод",
+        "ph_files":          "Выберите аудио или видео файлы...",
+        "ph_output":         "Путь для сохранения...",
+        "btn_browse":        "Обзор",
+        "btn_start":         "Старт",
+        "btn_stop":          "Остановить и Сохранить",
+        "btn_clear":         "Очистить",
+        "chk_vad":           "Анти-цикл (VAD)",
+        "chk_single":        "Один блок",
+        "chk_timestamps":    "Таймкоды",
+        "chk_translate":     "Перевести на английский",
+        "chk_install":       "Режим установки",
+        "status_ready":      "Готово",
+        "status_done":       "Завершено",
+        "status_stopped":    "Остановлено",
+        "status_error":      "Ошибка",
+        "lang_names": [
+            "Автоопределение", "Турецкий", "Английский", "Немецкий",
+            "Французский", "Испанский", "Китайский", "Японский"
+        ],
+        "ffmpeg_title":      "FFmpeg не найден",
+        "ffmpeg_msg":        "FFmpeg не найден в вашей системе. Он необходим для обработки аудио.\n\nСкачать и установить его автоматически с GitHub?",
+        "ffmpeg_warn":       "FFmpeg отсутствует. Приложение может работать некорректно.",
+        "ffmpeg_restart":    "FFmpeg установлен. Приложение будет перезапущено.",
+        "stop_title":        "Стоп",
+        "stop_msg":          "Остановить процесс и сохранить текущий прогресс?",
+        "exit_title":        "Выход",
+        "exit_msg":          "Транскрибация еще не завершена. Выйти все равно?",
+        "done_title":        "Завершено",
+        "done_msg":          "Все файлы обработаны.\nОбщее время: {:.2f}с",
+        "update_title":      "Доступно обновление",
+        "update_msg":        "Доступна новая версия: V{new}\nТекущая версия: V{cur}\n\nСкачать и перезапустить сейчас?",
+        "update_no_asset":   "Для этого релиза не найден файл .pyw. Проверьте GitHub вручную.",
+        "update_done":       "V{new} скачана.\nПредыдущая версия сохранена как .bak\nПерезапуск...",
+        "update_fail":       "Ошибка обновления:\n{err}\n\nПожалуйста, скачайте вручную с GitHub.",
+        "batch_output_info": "В пакетном режиме файлы сохраняются рядом с каждым исходным файлом.",
+        "warn_no_file":      "Пожалуйста, выберите хотя бы один файл.",
+        "install_error":     "Ошибка установки {lib}.\nДетали: {detail}",
+        "pytorch_error":     "Ошибка установки PyTorch (CUDA)."
+    }
 }
 
 # ── Theme palette definitions ─────────────────────────────────────────────────
@@ -218,7 +635,6 @@ DARK_PALETTE = {
     "text_dim":   "#484f58",
     "log_bg":     "#0d1117",
     "log_text":   "#8b949e",
-    # derived disabled tones (computed per accent in build_stylesheet)
 }
 
 LIGHT_PALETTE = {
@@ -243,6 +659,7 @@ def build_stylesheet(theme_name: str, dark: bool) -> str:
     a        = acc["accent"]
     a_hover  = acc["accent_hover"]
     a_press  = acc["accent_press"]
+
     # Disabled button tones — always derived from accent at low opacity feel
     a_dis_bg = base["bg_subtle"]
     a_dis_fg = base["text_dim"]
@@ -276,22 +693,48 @@ def build_stylesheet(theme_name: str, dark: bool) -> str:
     # Input text color when disabled
     inp_dis_txt = dim
     inp_dis_brd = subtle
-
     muted_svg = muted.replace("#", "%23")
+    font_family = "'Segoe UI Variable Display', 'Inter', 'Roboto', 'Segoe UI', sans-serif"
 
     return f"""
 /* ── Base ─────────────────────────────────────────────────── */
 QMainWindow {{
     background-color: {bg};
+    border: 1px solid {brd};
 }}
 QWidget {{
     color: {txt};
-    font-family: 'Segoe UI', sans-serif;
+    font-family: {font_family};
     font-size: 13px;
     background-color: transparent;
 }}
 QWidget#root {{
     background-color: {bg};
+}}
+
+/* ── Title Bar ────────────────────────────────────────── */
+QFrame#custom-titlebar {{
+    background-color: {card};
+    border-bottom: 1px solid {brd};
+}}
+QPushButton#btn-titlebar {{
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+    color: {txt};
+}}
+QPushButton#btn-titlebar:hover {{
+    background-color: {subtle};
+}}
+QPushButton#btn-titlebar-close {{
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+    color: {txt};
+}}
+QPushButton#btn-titlebar-close:hover {{
+    background-color: #e81123;
+    color: white;
 }}
 
 /* ── Cards ────────────────────────────────────────────────── */
@@ -331,7 +774,7 @@ QLabel#link {{
     font-size: 11px;
 }}
 
-/* ── Inputs ───────────────────────────────────────────────── */
+/* ── Inputs ───────────────────── */
 QLineEdit, QComboBox, QSpinBox {{
     background-color: {inp};
     border: 1px solid {brd};
@@ -347,6 +790,7 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{
 }}
 QLineEdit:read-only {{
     color: {muted};
+    background-color: {subtle};
 }}
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
     color: {inp_dis_txt};
@@ -354,10 +798,28 @@ QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {{
     background-color: {subtle};
 }}
 
-/* ── ComboBox ─────────────────────────────────────────────── */
-QComboBox {{
-    padding-right: 24px;
+/* ── Pop-ups ────────────────── */
+QMessageBox {{
+    background-color: {bg};
 }}
+QMessageBox QLabel {{
+    color: {txt};
+    background-color: transparent;
+}}
+QMessageBox QPushButton {{
+    background-color: {subtle};
+    color: {txt};
+    border: 1px solid {brd};
+    border-radius: 6px;
+    padding: 6px 16px;
+    min-height: 26px;
+    font-weight: 600;
+}}
+QMessageBox QPushButton:hover {{
+    background-color: {brd};
+}}
+
+/* ── ComboBox / Dropdown ──────────────────────────────────── */
 QComboBox::drop-down {{
     subcontrol-origin: padding;
     subcontrol-position: top right;
@@ -367,53 +829,34 @@ QComboBox::drop-down {{
 }}
 QComboBox::down-arrow {{
     image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z' fill='{muted_svg}'/></svg>");
-    width: 14px;
-    height: 14px;
+    width: 14px; 
+    height: 14px; 
     margin-right: 6px;
 }}
 QComboBox QAbstractItemView {{
     background-color: {card};
     border: 1px solid {brd};
-    border-radius: 4px;
-    selection-background-color: {a};
-    selection-color: {bg};
+    border-radius: 6px;
+    selection-background-color: {subtle};
+    selection-color: {a};
     outline: none;
     padding: 2px;
 }}
 
 /* ── SpinBox ──────────────────────────────────────────────── */
-QSpinBox {{
-    padding-right: 20px;
-}}
-QSpinBox::up-button {{
-    subcontrol-origin: border;
-    subcontrol-position: top right;
-    width: 18px;
-    border-left: 1px solid {brd};
-    border-bottom: 1px solid {brd};
-    background-color: {subtle};
-    border-top-right-radius: 5px;
-}}
-QSpinBox::down-button {{
-    subcontrol-origin: border;
-    subcontrol-position: bottom right;
-    width: 18px;
-    border-left: 1px solid {brd};
-    border-top: 1px solid {brd};
-    background-color: {subtle};
-    border-bottom-right-radius: 5px;
-}}
-QSpinBox::up-button:hover, QSpinBox::down-button:hover {{
-    background-color: {brd};
+QSpinBox::up-button, QSpinBox::down-button {{
+    border: none;
+    background: transparent;
+    width: 16px;
 }}
 QSpinBox::up-arrow {{
     image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7 14l5-5 5 5z' fill='{muted_svg}'/></svg>");
-    width: 12px;
+    width: 12px; 
     height: 12px;
 }}
 QSpinBox::down-arrow {{
     image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'><path d='M7 10l5 5 5-5z' fill='{muted_svg}'/></svg>");
-    width: 12px;
+    width: 12px; 
     height: 12px;
 }}
 
@@ -501,14 +944,12 @@ QPushButton#btn-header {{
     min-height: 24px;
     font-size: 11px;
     font-weight: 600;
+
 }}
 QPushButton#btn-header:hover {{
     border-color: {brd};
     color: {txt};
-}}
-QPushButton#btn-header:checked {{
-    border-color: {a};
-    color: {a};
+    background-color: {subtle};
 }}
 
 /* ── Progress bar ─────────────────────────────────────────── */
@@ -548,11 +989,14 @@ QScrollBar::handle:vertical {{
     border-radius: 3px;
     min-height: 24px;
 }}
+
 QScrollBar::handle:vertical:hover  {{ background: {muted}; }}
-QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical      {{ height: 0; }}
-QScrollBar::add-page:vertical,
-QScrollBar::sub-page:vertical      {{ background: none; }}
+
+QScrollBar::add-line:vertical, 
+QScrollBar::sub-line:vertical {{ height: 0; }}
+
+QScrollBar::add-page:vertical, 
+QScrollBar::sub-page:vertical {{ background: none; }}
 
 /* ── Frame containers ─────────────────────────────────────── */
 QFrame#header {{
@@ -576,6 +1020,74 @@ QFrame#theme-swatch:hover {{
 }}
 """
 
+class CustomTitleBar(QFrame):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.setObjectName("custom-titlebar")
+        self.setFixedHeight(36)
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(15, 0, 0, 0)
+        layout.setSpacing(0)
+        
+        # Başlık Metni
+        self.title_label = QLabel("Whisper Transcript")
+        self.title_label.setStyleSheet("font-weight: 700; font-size: 13px;")
+        layout.addWidget(self.title_label)
+        
+        layout.addStretch()
+        
+        # Simge Durumuna Küçült Butonu
+        self.btn_min = QPushButton("─")
+        self.btn_min.setObjectName("btn-titlebar")
+        self.btn_min.setFixedSize(46, 36)
+        self.btn_min.clicked.connect(self.parent.showMinimized)
+        layout.addWidget(self.btn_min)
+        
+        # Büyült/Küçült Butonu
+        self.btn_max = QPushButton("◻")
+        self.btn_max.setObjectName("btn-titlebar")
+        self.btn_max.setFixedSize(46, 36)
+        self.btn_max.clicked.connect(self.toggle_maximize)
+        layout.addWidget(self.btn_max)
+        
+        # Kapat Butonu
+        self.btn_close = QPushButton("✕")
+        self.btn_close.setObjectName("btn-titlebar-close")
+        self.btn_close.setFixedSize(46, 36)
+        self.btn_close.clicked.connect(self.parent.close)
+        layout.addWidget(self.btn_close)
+        
+        self.start_pos = None
+
+    def toggle_maximize(self):
+        if self.parent.isMaximized():
+            self.parent.showNormal()
+        else:
+            self.parent.showMaximized()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.start_pos = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        if self.start_pos:
+            # Sürükleme esnasında pencere maksimize ise önce normale döndür
+            if self.parent.isMaximized():
+                self.parent.showNormal()
+                self.start_pos = QPoint(int(self.parent.width() / 2), 10)
+                
+            delta = event.globalPosition().toPoint() - self.start_pos
+            self.parent.move(self.parent.pos() + delta)
+            self.start_pos = event.globalPosition().toPoint()
+
+    def mouseReleaseEvent(self, event):
+        self.start_pos = None
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.toggle_maximize()
 
 # ── Stderr capture for standard Whisper tqdm progress ────────────────────────
 class TqdmCapture:
@@ -1103,7 +1615,7 @@ class TranscriptWorker(QThread):
                 .replace(">", "&gt;")
             )
             lines.append(
-                f'      <p begin="{_fmt(entry["time"])}" end="{_fmt(end_sec)}">{safe}</p>'
+                f'       <p begin="{_fmt(entry["time"])}" end="{_fmt(end_sec)}">{safe}</p>'
             )
 
         lines.extend(["    </div>", "  </body>", "</tt>"])
@@ -1114,6 +1626,8 @@ class TranscriptWorker(QThread):
 class WhisperApp(QMainWindow):
     def __init__(self):
         super().__init__()
+        
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.Window)
 
         # Shared model state
         self._model_ref  = {"model": None, "key": None}
@@ -1135,7 +1649,6 @@ class WhisperApp(QMainWindow):
 
         self._check_ffmpeg()
         self._build_ui()
-        self._btn_lang.setText("EN" if self._ui_lang == "tr" else "TR")
         self._btn_mode.setText("☾" if self._dark_mode else "☀")
         self._apply_theme(animate=False)
         self._scan_models()
@@ -1192,6 +1705,9 @@ class WhisperApp(QMainWindow):
         layout = QVBoxLayout(root)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        
+        self.titlebar = CustomTitleBar(self)
+        layout.addWidget(self.titlebar)
 
         layout.addWidget(self._make_header())
 
@@ -1208,6 +1724,13 @@ class WhisperApp(QMainWindow):
 
         layout.addWidget(body, stretch=1)
         layout.addWidget(self._make_footer())
+        
+        size_grip_layout = QHBoxLayout()
+        size_grip_layout.setContentsMargins(0, 0, 0, 0)
+        size_grip_layout.addStretch()
+        size_grip = QSizeGrip(self)
+        size_grip_layout.addWidget(size_grip)
+        layout.addLayout(size_grip_layout)
 
     # ── Header ────────────────────────────────────────────────────────────────
     def _make_header(self):
@@ -1222,10 +1745,8 @@ class WhisperApp(QMainWindow):
         self._lbl_title.setStyleSheet(
             "font-size:19px; font-weight:700; letter-spacing:-0.5px;"
         )
-        # color will be set by _apply_theme
         self._lbl_subtitle = QLabel(self._s("header_sub"))
         self._lbl_subtitle.setStyleSheet("font-size:14px;")
-        # color set by theme
 
         hl.addWidget(self._lbl_title)
         hl.addWidget(self._lbl_subtitle)
@@ -1264,14 +1785,22 @@ class WhisperApp(QMainWindow):
 
         hl.addSpacing(4)
 
-        # ── Language toggle ───────────────────────────────────────────────
-        self._btn_lang = QPushButton("TR")
-        self._btn_lang.setObjectName("btn-header")
-        self._btn_lang.setFixedSize(32, 24)
-        self._btn_lang.setToolTip("Switch UI language / Arayüz dilini değiştir")
-        self._btn_lang.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
-        self._btn_lang.clicked.connect(self._toggle_lang)
-        hl.addWidget(self._btn_lang)
+        # ── Dynamic Language Dropdown ─────────────────
+        self._lang_ui_combo = QComboBox()
+        self._lang_ui_combo.setFixedWidth(90)
+        self._lang_ui_combo.setCursor(QCursor(Qt.CursorShape.PointingHandCursor))
+        
+        # Integrate the new languages
+        self._ui_langs_map = {"Türkçe": "tr", "English": "en", "Deutsch": "de", "Français": "fr", "Español": "es", "中文": "zh", "日本語": "ja"}
+        self._lang_ui_combo.addItems(list(self._ui_langs_map.keys()))
+        
+        # Apply current language automatically
+        current_name = [k for k, v in self._ui_langs_map.items() if v == self._ui_lang]
+        if current_name:
+            self._lang_ui_combo.setCurrentText(current_name[0])
+            
+        self._lang_ui_combo.currentTextChanged.connect(self._change_language)
+        hl.addWidget(self._lang_ui_combo)
 
         hl.addSpacing(8)
 
@@ -1493,6 +2022,10 @@ class WhisperApp(QMainWindow):
         hdr_layout.addWidget(self._lbl_log_header)
         hdr_layout.addStretch()
 
+        self._log_view = QPlainTextEdit()
+        self._log_view.setObjectName("log")
+        self._log_view.setReadOnly(True)
+
         self._btn_clear = QPushButton(self._s("btn_clear"))
         self._btn_clear.setFixedHeight(22)
         self._btn_clear.setMinimumWidth(52)
@@ -1501,10 +2034,6 @@ class WhisperApp(QMainWindow):
         hdr_layout.addWidget(self._btn_clear)
         layout.addWidget(log_hdr)
 
-        self._log_view = QPlainTextEdit()
-        self._log_view.setObjectName("log")
-        self._log_view.setReadOnly(True)
-        # now that _log_view exists, wire up the clear button properly
         self._btn_clear.clicked.disconnect()
         self._btn_clear.clicked.connect(self._log_view.clear)
         layout.addWidget(self._log_view)
@@ -1555,7 +2084,6 @@ class WhisperApp(QMainWindow):
 
         accent = THEME_ACCENTS[self._theme_name]["accent"]
         dim    = DARK_PALETTE["text_dim"] if self._dark_mode else LIGHT_PALETTE["text_dim"]
-        muted  = DARK_PALETTE["text_muted"] if self._dark_mode else LIGHT_PALETTE["text_muted"]
         txt    = DARK_PALETTE["text_main"] if self._dark_mode else LIGHT_PALETTE["text_main"]
 
         self._lbl_title.setStyleSheet(
@@ -1564,12 +2092,15 @@ class WhisperApp(QMainWindow):
         self._lbl_subtitle.setStyleSheet(f"color:{dim}; font-size:14px;")
         self._lbl_ver.setStyleSheet(f"color:{dim}; font-size:11px; font-family:monospace;")
 
+        self.titlebar.title_label.setStyleSheet(f"color:{txt}; font-weight: 700; font-size: 13px;")
+
+        border_color = '#ffffff' if self._dark_mode else '#000000'
+        
         for name, btn in self._swatch_btns.items():
             color = THEME_ACCENTS[name]["accent"]
             if name == self._theme_name:
                 btn.setStyleSheet(
-                    f"QPushButton {{ background-color:{color}; border-radius:7px;"
-                    f" border:2px solid white; }}"
+                    f"QPushButton {{ background-color:{color}; border-radius:7px; border:2px solid {border_color}; }}"
                 )
             else:
                 btn.setStyleSheet(
@@ -1581,13 +2112,11 @@ class WhisperApp(QMainWindow):
             QApplication.processEvents()
             effect = QGraphicsOpacityEffect(overlay)
             overlay.setGraphicsEffect(effect)
-
             self._theme_anim = QPropertyAnimation(effect, b"opacity")
             self._theme_anim.setDuration(500)
             self._theme_anim.setStartValue(1.0)
             self._theme_anim.setEndValue(0.0)
             self._theme_anim.setEasingCurve(QEasingCurve.Type.InOutQuad)
-            
             self._theme_anim.finished.connect(overlay.deleteLater)
             self._theme_anim.start()
 
@@ -1596,6 +2125,7 @@ class WhisperApp(QMainWindow):
         S = STRINGS[self._ui_lang]
 
         self.setWindowTitle(S["window_title"])
+        self.titlebar.title_label.setText(S["window_title"]) # Title bar text
         self._lbl_subtitle.setText(S["header_sub"])
 
         # Section headers
@@ -1637,14 +2167,14 @@ class WhisperApp(QMainWindow):
 
         # Status label (only update if showing "ready" equivalent)
         current_status = self._status_label.text()
-        for other_lang in ("en", "tr"):
+        for other_lang in STRINGS.keys():
             if current_status == STRINGS[other_lang]["status_ready"]:
                 self._status_label.setText(S["status_ready"])
                 break
 
-    def _toggle_lang(self):
-        self._ui_lang = "tr" if self._ui_lang == "en" else "en"
-        self._btn_lang.setText("EN" if self._ui_lang == "tr" else "TR")
+    def _change_language(self, text):
+        # Integrates the language selected in the UI to the code
+        self._ui_lang = self._ui_langs_map.get(text, "en")
         self._apply_language()
         self._save_preferences()
 
@@ -1841,7 +2371,7 @@ class WhisperApp(QMainWindow):
         elapsed = int(time.time() - self._timer_start)
         m, s    = divmod(elapsed, 60)
         self._timer_label.setText(f"{m}:{s:02d}")
-
+        
     # ── Update system ─────────────────────────────────────────────────────────
     def _on_update_available(self, new_version, asset):
         msg = self._s("update_msg").format(new=new_version, cur=APP_VERSION)
@@ -1921,7 +2451,7 @@ class WhisperApp(QMainWindow):
         event.accept()
 
 
-# ── Preferences System (Yeni Eklenen Metotlar) ────────────────────────────
+# ── Preferences System ────────────────────────────────────────────────────────
     def _get_config_path(self):
         return os.path.join(BASE_DIR, "whisper_gui_config.json")
 
@@ -2003,7 +2533,6 @@ def _bootstrap_install():
 
     sys.exit(0)
 
-
 # ── Entry point ───────────────────────────────────────────────────────────────
 def main():
     if not PYQT6_OK:
@@ -2015,9 +2544,10 @@ def main():
     app.setStyle("WindowsVista")
 
     window = WhisperApp()
+    window.show()
     window.showMaximized()
-    sys.exit(app.exec())
 
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()
